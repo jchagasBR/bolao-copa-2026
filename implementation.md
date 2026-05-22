@@ -3,7 +3,63 @@
 > **Document language:** English (dev artifact).
 > **Companion docs:** [`requirements.md`](./requirements.md), [`architecture.md`](./architecture.md).
 > **Hard deadline:** WC 2026 starts **2026-06-11**. MVP must be live before kickoff of match 1.
-> **Today:** 2026-05-22 → ~20 days until kickoff, with Phase 9 reserved for launch on 06-10 and a **buffer day (06-09)** between polish/UAT and launch.
+> **Original plan start:** 2026-05-22 → ~20 days until kickoff, with Phase 9 reserved for launch on 06-10 and a **buffer day (06-09)** between polish/UAT and launch.
+
+## Session log
+
+**Last session ended:** 2026-05-23 evening, by user request ("I will stop now").
+**Current phase:** Phase 0 — partially complete.
+**Schedule status:** ~1 day behind the original plan (Phase 0 was scheduled for Day 1, but we needed Day 1 to install tooling and the API-Football decision change). Phase 6 freed 1 day, so net we're on track.
+
+### What's done
+
+- All local Phase 0 deliverables (toolchain, scaffold, deps, shadcn, landing page, CI workflow).
+- Public GitHub repo live at **https://github.com/jchagasBR/bolao-copa-2026**.
+- Two commits on `main`, both pushed and CI-green:
+  - `1589b0e` — chore: bootstrap project (Phase 0)
+  - `b952b40` — docs: drop API-Football, switch to manual admin score entry
+- gh CLI authenticated as `jchagasBR` with `workflow` scope.
+- Three founding docs and `doc-auditor` subagent in place.
+- **Strategy change:** dropped API-Football (free tier excludes WC 2026); match scores will be entered manually by pool admins. Phase 6 shrank from 2 days to 1.
+
+### What's pending (resume here)
+
+Three external accounts the user must create — Claude cannot do these. **All are blockers for Phase 1.**
+
+1. **Supabase project** → paste back `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+   - Region: `sa-east-1` (São Paulo)
+   - Project name: `bolao-copa-2026`
+
+2. **Resend account** → paste back `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; then configure Supabase Auth → SMTP (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: the Resend API key); send a test confirmation email to a Gmail address and report whether it landed in inbox or spam.
+
+3. **Vercel project** → import the GitHub repo, paste env vars (placeholders OK for Supabase ones until you have them), trigger a first deploy. Paste back the production URL → that becomes `APP_URL`.
+
+### First action when resuming
+
+When ready, paste the Supabase/Resend/Vercel values to Claude. Claude will then:
+1. Write `.env.local` with the real values
+2. Verify `pnpm dev` connects to Supabase (sanity check)
+3. Move directly into **Phase 1** (auth pages, middleware, pool dashboard, pool switcher)
+
+If you want to do Phase 1 *before* all three accounts exist: Supabase is the only hard requirement (auth needs it). Resend can be deferred until you want real confirmation emails (Supabase Auth will use its low-rate default until SMTP is configured). Vercel can be deferred until you want a public preview URL.
+
+### Useful refresh commands for the next session
+
+```powershell
+# Refresh PATH (PowerShell tool sessions need this each invocation)
+$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
+
+# Sanity check the toolchain
+node --version; pnpm --version; git --version; gh --version
+
+# Pull latest (in case of any GitHub-side edits)
+git pull --ff-only
+
+# Local dev server
+pnpm dev
+```
+
+---
 
 ## How to use this file
 
@@ -15,31 +71,39 @@
 
 ---
 
-## Phase 0 — Documentation & setup (Day 1: 2026-05-22) ✅ in progress
+## Phase 0 — Documentation & setup (started 2026-05-22, code done 2026-05-23, external pending) 🟡 in progress
 
 **Goal:** repo and infrastructure are ready to receive code.
 
-- [x] `requirements.md`, `architecture.md`, `implementation.md` written
-- [ ] User reviews all three docs and approves
-- [ ] **User signs off on the bonus point values in `requirements.md` §4.2** (defaults stand unless changed)
-- [ ] Create public GitHub repo `bolao-copa-2026` and push the three docs as the first commit
-- [ ] Bootstrap Next.js app: `pnpm create next-app@latest . --ts --tailwind --eslint --app --src-dir=false --import-alias="@/*"`
-- [ ] Install core deps: `pnpm add @supabase/supabase-js @supabase/ssr zod react-hook-form @hookform/resolvers date-fns date-fns-tz resend`
-- [ ] Install dev deps: `pnpm add -D vitest @vitest/ui @types/node`
-- [ ] Initialize shadcn/ui: `pnpm dlx shadcn@latest init` (Slate, CSS variables, RSC)
-- [ ] Create Supabase project (region: `sa-east-1` São Paulo) and capture URL + anon key + service role key
-- [ ] Create Resend account, verify a sender domain (or use Resend's `onboarding@resend.dev` for development) and capture API key
-- [x] ~~Create API-Football account and test WC 2026 coverage~~ — **dropped 2026-05-23.** Free tier covers only seasons 2022-2024 and WC 2026 is paywalled. Rather than pay $19 to verify Pro coverage, we dropped the external sports API entirely. Match scores will be entered manually by admins. See `architecture.md` §2.6 / §5.
-- [ ] **Send a test email through Resend SMTP from Supabase Auth to a real Gmail address and confirm it doesn't land in spam** (early deliverability check; flips on Phase 1 risk)
-- [ ] Create `.env.local` with all keys from §8 of `architecture.md`; create `.env.example` with empty values
-- [ ] Connect GitHub repo to Vercel; configure all env vars in Vercel project settings (Production + Preview)
-- [ ] Set up GitHub Actions CI (`.github/workflows/ci.yml`) and branch protection on `main`
-- [ ] Deploy a placeholder landing page to Vercel
+**Local / code work — done:**
 
-**Verify:**
-- The Vercel production URL serves a "Bolão Copa 2026" landing page in PT-BR.
+- [x] `requirements.md`, `architecture.md`, `implementation.md` written
+- [x] User reviews all three docs and approves
+- [x] User signs off on the bonus point values in `requirements.md` §4.2 (defaults stand)
+- [x] Create public GitHub repo `bolao-copa-2026` (https://github.com/jchagasBR/bolao-copa-2026) and push (commit `1589b0e`)
+- [x] Bootstrap Next.js app — _actual: Next **16** + React 19 + Tailwind 4 (newer than the planned 14)_
+- [x] Install core deps: `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `react-hook-form`, `@hookform/resolvers`, `date-fns`, `date-fns-tz`, `resend`, `@react-email/components`
+- [x] Install dev deps: `vitest`, `@vitest/ui`
+- [x] Initialize shadcn/ui (preset `base-nova`, neutral colors, RSC) — added `button` and `card`
+- [x] Set up GitHub Actions CI (`.github/workflows/ci.yml`) — lint + typecheck + test + build; first run passed
+- [x] Deploy a placeholder PT-BR landing page locally (`pnpm build` succeeds)
+- [x] ~~Create API-Football account and test WC 2026 coverage~~ — **dropped 2026-05-23.** Free tier covers only seasons 2022-2024 and WC 2026 is paywalled. Rather than pay $19 to verify Pro coverage, we dropped the external sports API entirely. Match scores will be entered manually by admins. See `architecture.md` §2.6 / §5. (commit `b952b40`)
+- [x] Create `.env.example` (without `API_FOOTBALL_KEY`); `.env.local` will be created when keys arrive
+
+**External / user work — pending (the resume point):**
+
+- [ ] **Create Supabase project** (region `sa-east-1`) and capture URL + anon key + service role key
+- [ ] **Create Resend account**, get API key + sender email
+- [ ] **Configure Supabase Auth → SMTP** with Resend (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: Resend API key)
+- [ ] **Send a test confirmation email** through Supabase Auth to a real Gmail address; confirm it lands in inbox, not spam
+- [ ] **Connect Vercel to the GitHub repo**, configure env vars (placeholders OK initially), trigger first deploy, capture production URL → `APP_URL`
+- [ ] _(Deferred)_ Set branch protection on `main` (requires CI status check name to exist; can wait until after Phase 2)
+
+**Verify (gate to Phase 1):**
+- The Vercel production URL serves the "Bolão Copa 2026" landing page in PT-BR.
 - A test PR triggers CI and a Vercel preview deploy.
 - The Gmail deliverability test email is in the inbox (not spam).
+- `pnpm dev` locally connects to Supabase without error (a `supabase.auth.getSession()` call succeeds).
 
 ---
 
