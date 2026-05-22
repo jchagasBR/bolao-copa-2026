@@ -29,7 +29,7 @@
 - [ ] Initialize shadcn/ui: `pnpm dlx shadcn@latest init` (Slate, CSS variables, RSC)
 - [ ] Create Supabase project (region: `sa-east-1` São Paulo) and capture URL + anon key + service role key
 - [ ] Create Resend account, verify a sender domain (or use Resend's `onboarding@resend.dev` for development) and capture API key
-- [ ] Create API-Football account (free tier first), capture key, and **test WC 2026 coverage** with: `GET https://v3.football.api-sports.io/leagues?id=1&season=2026`
+- [x] ~~Create API-Football account and test WC 2026 coverage~~ — **dropped 2026-05-23.** Free tier covers only seasons 2022-2024 and WC 2026 is paywalled. Rather than pay $19 to verify Pro coverage, we dropped the external sports API entirely. Match scores will be entered manually by admins. See `architecture.md` §2.6 / §5.
 - [ ] **Send a test email through Resend SMTP from Supabase Auth to a real Gmail address and confirm it doesn't land in spam** (early deliverability check; flips on Phase 1 risk)
 - [ ] Create `.env.local` with all keys from §8 of `architecture.md`; create `.env.example` with empty values
 - [ ] Connect GitHub repo to Vercel; configure all env vars in Vercel project settings (Production + Preview)
@@ -38,7 +38,6 @@
 
 **Verify:**
 - The Vercel production URL serves a "Bolão Copa 2026" landing page in PT-BR.
-- `GET /leagues?id=1&season=2026` returns at least one league entry confirming WC 2026 is in the API-Football catalog.
 - A test PR triggers CI and a Vercel preview deploy.
 - The Gmail deliverability test email is in the inbox (not spam).
 
@@ -153,23 +152,23 @@
 
 ---
 
-## Phase 6 — API-Football sync + cron + admin override (Days 14-15: 2026-06-04 to 2026-06-05)
+## Phase 6 — Admin score entry (Day 14: 2026-06-04)
 
-**Goal:** real match results flow in automatically; admin can fix any miss.
+**Goal:** the admin can enter / edit a match score and have every pool's points recompute.
 
-- [ ] Implement `lib/football-api/client.ts` with fetch wrapper (retry, 5s timeout, header-based caching)
-- [ ] Implement `app/api/cron/sync-scores/route.ts` — protected by `CRON_SECRET` header check, queries matches in the live window, updates `home_score`/`away_score`/`status`, and calls `recompute_match(match_id)` for each changed match
-- [ ] Declare the cron in `vercel.json` running every 5 minutes
-- [ ] Implement `/admin/jogos/[matchId]` editor with a score override form (no list page — reached by direct URL)
-- [ ] Page guard: visible only if `exists (select 1 from pool where admin_id = auth.uid())` — any pool admin may override any match score (architecture §2.4 / §6)
-- [ ] Server action behind the admin form calls `recompute_match(match_id)` after the manual override write; this rescore propagates to **every pool's** bets on that match
-- [ ] Verify that a user who created at least one pool gets through the guard; a user who is only a member (not admin) of any pool is rejected
-- [ ] Add structured logging in the cron and a Resend email alert on ≥3 consecutive API failures
+Scope shrank significantly on 2026-05-23 when we dropped the external sports API (see `architecture.md` §2.6 / §5). What used to be "API wrapper + cron + admin override" is now just the admin form. Estimated at 1 day; surplus day flows into the buffer or earlier-phase slip.
+
+- [ ] Implement `/admin/jogos/[matchId]` editor with a score-entry form (home/away number inputs, Zod validation, no list page — reached by direct URL or from `/jogos` when authenticated as a pool admin)
+- [ ] Page guard: visible only if `exists (select 1 from pool where admin_id = auth.uid())` — any pool admin may edit any match score (architecture §2.4 / §6)
+- [ ] Server action: validates input, writes `home_score` / `away_score` / `status='finished'` on the `match` row, then calls `recompute_match(match_id)` — rescore propagates to **every pool's** bets on that match
+- [ ] Add an "edit kickoff" affordance on the same form so the admin can adjust `kickoff_at` if a fixture is postponed
+- [ ] Add a small "Aguardando placar" badge to past-kickoff matches with `status != 'finished'` so participants can see the score is pending entry, not broken
 
 **Verify:**
-- Trigger the cron manually with a past test match — `match.home_score` updates and `score` rows are recomputed.
-- Admin edits a score in the panel and the ranking updates within 60 seconds.
+- Admin enters a score in the panel and the ranking updates within 60 seconds.
+- Re-entering a different score for the same match (correction case) updates ranking again without errors (idempotent `recompute_match`).
 - A non-admin user hitting `/admin/jogos/[matchId]` gets `notFound()`.
+- A past-kickoff unscored match shows "Aguardando placar" on the participant `/jogos` view.
 - **Run `doc-auditor` subagent.** Address any P0/P1 items in its report before moving to Phase 7.
 
 ---
@@ -237,7 +236,6 @@
 
 - [ ] Show a final results page declaring the pool champion (with confetti)
 - [ ] Add a "Exportar meus palpites" button on `/perfil` that downloads JSON
-- [ ] Downgrade API-Football to free tier or cancel to stop the monthly charge
 - [ ] Retrospective: what we'd build differently for the next tournament
 
 ---

@@ -14,8 +14,9 @@ A private prediction pool web app for friends to bet on FIFA World Cup 2026 resu
 - **Tailwind CSS** + shadcn/ui
 - **Supabase** (Postgres + Auth + Realtime)
 - **Vercel** (hosting + cron)
-- **API-Football** (live match results)
 - **Resend** (transactional email)
+
+Match scores are entered manually by pool admins — no external sports API. See [architecture.md §5](./architecture.md).
 
 ## Local development
 

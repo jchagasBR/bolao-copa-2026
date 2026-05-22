@@ -13,24 +13,17 @@
                                  │ HTTPS
                                  ▼
                   ┌──────────────────────────────┐
-                  │ Vercel — Next.js 14 (SSR/RSC)│
+                  │ Vercel — Next.js (SSR/RSC)   │
                   │  - App Router pages          │
                   │  - Server Actions            │
                   │  - Route Handlers            │
-                  │  - Cron Jobs (Vercel Cron)   │
-                  └────┬────────────┬────────────┘
-                       │            │
-              Supabase │            │ HTTPS
-              JS client│            ▼
-                       │   ┌─────────────────────┐
-                       │   │  API-Football       │
-                       │   │  (api-sports.io)    │
-                       │   └─────────────────────┘
-                       │
-                       ▼
+                  │  - Cron (reminders only)     │
+                  └────────────┬─────────────────┘
+                               │ Supabase JS client
+                               ▼
         ┌─────────────────────────────┐
         │ Supabase                    │
-        │  - Postgres (data + triggers)│
+        │  - Postgres (data)          │
         │  - Auth (email + password)  │
         │  - Realtime (live ranking)  │
         └─────────────────────────────┘
@@ -43,7 +36,7 @@
 **Why this shape:**
 - Single deployment target (Vercel) — no separate API server to operate.
 - Supabase covers DB + Auth + Realtime in one managed service, with a generous free tier.
-- The external API is touched only by server-side cron jobs, never directly by the browser, so the API key never leaks.
+- **No external sports API** in the MVP. Match scores are entered manually by a pool admin via the admin panel (see §5). Decision rationale: the only viable API (API-Football) paywalls WC 2026 even on its trial tier, free alternatives have uncertain coverage, and manual entry for ~104 matches over 6 weeks is a small operational cost for a friends-only product.
 
 ## 2. Stack
 
@@ -87,10 +80,10 @@
 - **Supabase Realtime** subscription on the `score` table only (a `match` score update propagates into `score` rows, so subscribing to `score` is sufficient and cheaper).
 - The ranking page subscribes once per pool and re-fetches the aggregated ranking on change events.
 
-### 2.6 External API
-- **API-Football** by api-sports.io.
-- Plan: **Pro** ($19/mo, ~R$95) — 7,500 requests/day, sufficient.
-- **Risk to verify before paying:** WC 2026 coverage is listed on api-sports.io but should be confirmed by hitting `GET /leagues?id=1&season=2026` with the free trial key first.
+### 2.6 External sports data
+- **None.** Match scores and statuses are entered by a pool admin via the admin panel (see §5).
+- The 104 WC 2026 fixtures (teams, groups, kickoff times) are seeded **once** during Phase 2 from a public schedule source (FIFA.com or the Wikipedia "2026 FIFA World Cup" page). No live data dependency at runtime.
+- _History note:_ we originally planned to use API-Football (api-sports.io) at $19/mo, but verified on 2026-05-23 that the free trial only covers seasons 2022-2024 and WC 2026 is paywalled. Rather than pay $19 to verify Pro coverage, we dropped the dependency.
 
 ### 2.7 Email (transactional)
 - **Resend** — free tier 3,000/mo, 100/day.
@@ -148,7 +141,6 @@ bolao-copa-2026/
 │   │   └── jogos/[matchId]/page.tsx   # single editor reached by direct URL
 │   ├── api/
 │   │   └── cron/
-│   │       ├── sync-scores/route.ts
 │   │       └── send-reminders/route.ts
 │   ├── layout.tsx                 # root layout
 │   └── globals.css
@@ -167,9 +159,6 @@ bolao-copa-2026/
 │   │   ├── match.ts               # pure functions for §4.1
 │   │   ├── bonus.ts               # pure functions for §4.2
 │   │   └── ranking.ts             # tiebreak per §4.5
-│   ├── football-api/
-│   │   ├── client.ts              # fetch wrapper, retry, cache
-│   │   └── types.ts               # API response types
 │   └── time.ts                    # date-fns-tz helpers (formatInTimeZone, parseISO)
 ├── supabase/
 │   ├── migrations/                # versioned SQL
@@ -247,7 +236,7 @@ create trigger pool_member_cap before insert on pool_member
 -- team: the 48 teams in WC 2026
 create table team (
   id         uuid primary key default gen_random_uuid(),
-  external_id integer unique,                -- API-Football team id, nullable for safety
+  external_id integer unique,                -- optional id from whatever source seeded the team (nullable)
   name       text not null,                  -- "Brasil"
   iso_code   text not null,                  -- "BRA"
   flag_url   text,
@@ -256,13 +245,13 @@ create table team (
 
 -- match: a fixture.
 -- Surrogate UUID PK so re-seeding from a different data source isn't destructive;
--- external_id links to the API-Football fixture.
+-- external_id is optional and refers to whatever schedule source we seeded from.
 create type match_stage as enum ('group', 'r32', 'r16', 'qf', 'sf', 'third', 'final');
 create type match_status as enum ('scheduled', 'live', 'finished', 'postponed');
 
 create table match (
   id            uuid primary key default gen_random_uuid(),
-  external_id   integer unique,              -- API-Football fixture id
+  external_id   integer unique,              -- optional id from the schedule source (nullable)
   stage         match_stage not null,
   group_code    char(1),                     -- only for stage='group'
   home_team_id  uuid references team(id),
@@ -351,9 +340,7 @@ create table reminder_sent (
 We deliberately **do not** use Postgres triggers to recompute scores. A trigger fired by every `match` update compounds debugging with RLS and Realtime. Instead:
 
 - A SQL function **`recompute_match(match_id uuid) returns void`** reads the match score and upserts the corresponding `score` row for every `bet_match` against that match. It also sets `is_exact_score` and `is_correct_winner` for tiebreaker support.
-- It is called explicitly from two places:
-  - The cron handler `/api/cron/sync-scores` after it writes a new score from API-Football.
-  - The admin override server action after a manual score edit.
+- It is called explicitly from one place: the admin score-entry server action, after the manual write to `match.home_score` / `match.away_score`.
 - A `BEFORE INSERT OR UPDATE ON bet_match` trigger remains — `bet_match_locked` — which rejects writes when `now() >= match.kickoff_at`. This is a hard data integrity rule, not a scoring concern, so a trigger is the right place.
 
 Idempotency: `recompute_match` performs `INSERT … ON CONFLICT DO UPDATE`. Calling it twice with the same input produces the same `score` rows.
@@ -484,19 +471,29 @@ group by s.pool_id, s.user_id, p.name;
 ```
 Order on the client by `points desc, exact_count desc, correct_winner_count desc, name asc` — exactly the tiebreak rule in `requirements.md` §4.5.
 
-## 5. API-Football integration
+## 5. Match score entry (manual, by admin)
 
-**Endpoint shape:**
-- `GET /fixtures?league=1&season=2026` — list all WC 2026 matches.
-- `GET /fixtures?id={external_id}` — live status of a single match.
+There is no external sports data API. Match scores arrive in the system through a single path: an admin opens the admin panel, enters the score, submits.
+
+**Flow:**
+1. Admin navigates to `/admin/jogos/[matchId]` (reached by direct URL from the matches list when logged in as an admin of any pool).
+2. Form shows two number inputs (home/away) and the match metadata.
+3. On submit, the server action:
+   a. Verifies `exists (select 1 from pool where admin_id = auth.uid())` — any pool admin may edit any score (architecture §2.4 / §6).
+   b. Writes `home_score`, `away_score`, and sets `status = 'finished'` on the `match` row.
+   c. Calls `recompute_match(match_id)` to upsert `score` rows for every `bet_match` against that match.
+4. Realtime subscribers on `score` get notified; ranking pages across all pools refresh within ~60s.
 
 **Cron strategy (declared in `vercel.json`):**
-- `/api/cron/sync-scores` — every 5 minutes. Server checks which matches are currently in the window `[kickoff_at - 1h, kickoff_at + 4h]`, refreshes only those, and calls `recompute_match(match_id)` after a score update (≤ ~12 matches at peak; under the 7,500/day quota by an order of magnitude).
 - `/api/cron/send-reminders` — hourly. Finds users in any pool with no prediction for a match starting in the next 12-24h and sends a Resend email; the `reminder_sent (user_id, match_id)` table prevents duplicates across runs.
+- _(No `sync-scores` cron — match data is admin-driven.)_
 
-**Failure modes:**
-- If the API returns ≥3 failures in a row, the cron logs to Vercel logs and the admin gets an email alert via Resend.
-- The admin panel `/admin/jogos/[matchId]` allows manual score entry that bypasses the API entirely.
+**Operational expectations:**
+- WC 2026 has ~104 matches over ~6 weeks. ~3-4 group-stage matches per day at peak.
+- Admin enters a score in ~30s. Total operational cost: ~50 minutes over the tournament.
+- Admin SLA: enter the score within 12 hours of full time. Participants understand "ranking updates when [admin] enters the result."
+
+**Fixture seeding:** the 104 fixtures (teams, groups, kickoffs) are seeded once during Phase 2 from FIFA's public schedule (FIFA.com or the Wikipedia "2026 FIFA World Cup" article). Captured as plain SQL in `supabase/migrations/0005_seed_matches.sql`. No runtime fetch.
 
 ## 6. Authentication and authorization
 
@@ -538,8 +535,8 @@ Order on the client by `points desc, exact_count desc, correct_winner_count desc
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-API_FOOTBALL_KEY=
 RESEND_API_KEY=
+RESEND_FROM_EMAIL=
 CRON_SECRET=
 APP_URL=
 ```
@@ -550,19 +547,20 @@ APP_URL=
 |---|---|---|
 | Vercel | Hobby (free) | R$0 |
 | Supabase | Free | R$0 |
-| API-Football | Pro | ~R$95 |
 | Resend | Free | R$0 |
-| **Total** | | **~R$95** |
+| **Total** | | **R$0** |
 
-Well within the R$150 budget. If Vercel free tier is exceeded on a match day, Pro is $20/mo (~R$100), pushing total to ~R$195 — acceptable as a one-off upgrade only if needed.
+Well under the R$150 budget. If Vercel free tier is exceeded on a match day, Pro is $20/mo (~R$100) — acceptable as a one-off upgrade only if needed. The R$150 budget is now a safety margin rather than a target.
 
 ## 10. Risks and mitigations
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| API-Football doesn't cover WC 2026 well | Medium | **Verify with free trial key before paying.** Manual admin score entry is the fallback for any match. |
+| Admin forgets / delays entering a score | Medium | One pool admin per pool, and *any* pool admin may edit any score (§2.4 / §6) — so the burden is shared across all pool creators. UI shows "aguardando placar" so participants know it's pending, not broken. |
+| Admin enters a wrong score | Low-Medium | The same form is also the correction form; re-submitting reruns `recompute_match` idempotently and ranking refreshes in ~60s. |
 | Vercel free tier exhausted on big match day | Low-Medium | Upgrade to Pro on demand; not a code change. |
 | Supabase Auth emails go to spam | Medium | Use Resend SMTP from day 1; warn users to check spam in the welcome message. |
-| 3-week schedule slips | Medium-High | Notifications (Phase 7) is the natural cut — ship after kickoff if needed. |
+| ~3-week schedule slips | Medium-High | Notifications (Phase 7) is the natural cut — ship after kickoff if needed. Bracket UI (Phase 4) is the second cut. |
 | Realtime ranking adds load on Supabase free tier | Low | Limit subscription to one channel per pool; fallback to manual refresh button if degraded. |
-| Time zone bugs (UTC vs São Paulo) | Medium | Single `lib/time.ts` helper used everywhere; vitest coverage on it. |
+| Time zone bugs (UTC vs browser) | Medium | Single `<LocalTime />` Client Component + `lib/time.ts`; vitest coverage on the helpers. |
+| Seed schedule diverges from real fixtures (postponements, time changes) | Low-Medium | Admin can edit `kickoff_at` from the same `/admin/jogos/[matchId]` panel. |

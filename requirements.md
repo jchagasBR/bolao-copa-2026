@@ -23,7 +23,7 @@
 - An admin can:
   - Edit the pool's name.
   - Regenerate the invite code.
-  - Override a match score manually if the external API fails or lags (scoped to their pool only).
+  - **Enter and edit match scores** — admin entry is the canonical source of match results (there is no external sports data API in the MVP; see `architecture.md` §5).
   - Inspect pool state (counts, missing predictions).
 - **One admin per pool** in the MVP — the user who created it. No co-admin or transfer.
 
@@ -197,9 +197,9 @@ The MVP is considered complete when **all** of the following are demonstrably tr
 3. At least one user is a member of **both** pools and can switch between them via the header without losing state.
 4. A user in **Europe** (e.g., Lisbon) and a user in **São Paulo** see the same match kickoff displayed in their own local time, both correctly.
 5. Each member can submit predictions for **every** group-stage match (72 matches in WC 2026), the group standings, and the champion **per pool they belong to**.
-6. After each test match is closed with a score, all participants' points update within 60 seconds (via the realtime channel or page refresh) — independently per pool.
+6. After an admin enters a match score via the admin panel, all participants' points update within 60 seconds (via the realtime channel or page refresh) — independently per pool.
 7. The ranking page of each pool reflects the correct order per §4.5 for that pool only.
-8. Any pool admin can override a match score via the admin panel; because match data is global (the score of Brazil vs Argentina is one fact), the update applies to every pool's bets on that match and points across all pools recalculate within 60 seconds. The trust model is that all pool admins are trusted friends.
+8. Any pool admin can enter or edit a match score via the admin panel; because match data is global (the score of Brazil vs Argentina is one fact), the update applies to every pool's bets on that match and points across all pools recalculate within 60 seconds. The trust model is that all pool admins are trusted friends.
 9. A user attempting to join an 11th pool is blocked with the PT-BR error in §4.6.
 
 ## 8. Glossary
