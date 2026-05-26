@@ -13,4 +13,10 @@ A migration is idempotent if it uses `create table if not exists`, `create or re
 
 ## Current migrations
 
-- `0001_init.sql` — Phase 1: `profile` table + RLS + `auth.users → profile` trigger. Phase 2 will extend this same file with the rest of the schema (`pool`, `match`, `score`, `bet_*`, scoring functions).
+Apply in this order. Each file is idempotent; re-running a file is safe.
+
+1. `0001_init.sql` — full schema: enums, `profile`, `pool`, `pool_member` (with 10-pool cap trigger), `team`, `match`, `bet_match`, `bet_group`, `bet_knockout`, `bet_champion`, `score`, `reminder_sent`, the `first_kickoff` / `first_r32_kickoff` / `pool_ranking` views, and the `auth.users → profile` trigger.
+2. `0002_rls.sql` — RLS policies for every table per `architecture.md` §4.2 (own-bets-before-kickoff, peer-bets-after-kickoff, member-only pool reads, public team/match reads, etc.).
+3. `0003_scoring.sql` — scoring functions `compute_match_points`, `recompute_match`, `recompute_bonuses` (stub until Phase 4), and the `bet_match_locked` trigger.
+4. `0004_seed_teams_groups.sql` — the 48 WC 2026 teams with their group letter (A-L). Source: Wikipedia "2026 FIFA World Cup Group A".."Group L".
+5. `0005_seed_matches.sql` — the 104 fixtures with `kickoff_at` in UTC. Group-stage matches have home/away assigned; knockout fixtures (73-104) have NULL teams until the admin populates them.
