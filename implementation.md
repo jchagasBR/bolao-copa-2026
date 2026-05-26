@@ -28,9 +28,9 @@ Three external accounts the user must create — Claude cannot do these. **All a
 
 1. ~~**Supabase project**~~ — **DONE 2026-05-26.** Project `bolao-copa-2026` created in region `eu-central-1` (Frankfurt; chosen to balance latency for users in Poland and São Paulo). Credentials wired into `.env.local`; both publishable and secret keys verified against `/auth/v1/health` and `/rest/v1/`.
 
-2. **Resend account** → paste back `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; then configure Supabase Auth → SMTP (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: the Resend API key); send a test confirmation email to a Gmail address and report whether it landed in inbox or spam.
+2. ~~**Resend account**~~ — **DONE 2026-05-26.** API key + sandbox sender `onboarding@resend.dev` wired into Supabase Auth SMTP (Host: `smtp.resend.com`, Port: `465`, User: `resend`). Test invitation arrived in Gmail **Inbox**. ⚠️ Sandbox sender only delivers to the Resend account owner's email — a custom domain must be verified on Resend before Phase 9 (launch) so invitations can reach all friends. See [[project-resend-sandbox-limit]].
 
-3. **Vercel project** → import the GitHub repo, paste env vars (placeholders OK for Supabase ones until you have them), trigger a first deploy. Paste back the production URL → that becomes `APP_URL`.
+3. **Vercel project** _(deferred — Phase 1 can proceed locally without it)_ → import the GitHub repo, paste env vars, trigger a first deploy. Paste back the production URL → that becomes `APP_URL`.
 
 ### First action when resuming
 
@@ -69,7 +69,7 @@ pnpm dev
 
 ---
 
-## Phase 0 — Documentation & setup (started 2026-05-22, code done 2026-05-23, external pending) 🟡 in progress
+## Phase 0 — Documentation & setup (started 2026-05-22, code done 2026-05-23, Supabase + Resend done 2026-05-26) 🟢 nearly complete (Vercel deferred)
 
 **Goal:** repo and infrastructure are ready to receive code.
 
@@ -91,10 +91,11 @@ pnpm dev
 **External / user work — pending (the resume point):**
 
 - [x] **Create Supabase project** (region `eu-central-1`, Frankfurt) and capture URL + publishable key + secret key — _done 2026-05-26_
-- [ ] **Create Resend account**, get API key + sender email
-- [ ] **Configure Supabase Auth → SMTP** with Resend (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: Resend API key)
-- [ ] **Send a test confirmation email** through Supabase Auth to a real Gmail address; confirm it lands in inbox, not spam
-- [ ] **Connect Vercel to the GitHub repo**, configure env vars (placeholders OK initially), trigger first deploy, capture production URL → `APP_URL`
+- [x] **Create Resend account**, get API key + sender email (`onboarding@resend.dev` sandbox sender) — _done 2026-05-26_
+- [x] **Configure Supabase Auth → SMTP** with Resend (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: Resend API key) — _done 2026-05-26 (after 535 username/password debug — username must be exactly `resend`, password must be the actual API key value, not the masked dashboard display)_
+- [x] **Send a test confirmation email** through Supabase Auth to a real Gmail address; confirm it lands in inbox, not spam — _done 2026-05-26, landed in Gmail Inbox_
+- [ ] **Verify a custom domain on Resend** before sharing the invite code with friends (Phase 9 blocker). Sandbox sender only delivers to the Resend account owner's email.
+- [ ] **Connect Vercel to the GitHub repo**, configure env vars (placeholders OK initially), trigger first deploy, capture production URL → `APP_URL` — _deferred; Phase 1 can proceed locally without it_
 - [ ] _(Deferred)_ Set branch protection on `main` (requires CI status check name to exist; can wait until after Phase 2)
 
 **Verify (gate to Phase 1):**
@@ -109,7 +110,7 @@ pnpm dev
 
 **Goal:** users can sign up, confirm email, log in, and see the "Meus bolões" dashboard with a path to create or join a pool.
 
-- [ ] Configure Resend as Supabase Auth SMTP (Supabase dashboard → Authentication → SMTP)
+- [x] ~~Configure Resend as Supabase Auth SMTP~~ — _done in Phase 0, 2026-05-26_
 - [ ] Customize Supabase Auth email templates in PT-BR (confirmation only; reset template stays default since the flow is out of scope)
 - [ ] Build PT-BR pages: `/cadastro` (sign up), `/entrar` (login)
 - [ ] Implement server actions for sign up / login / logout
