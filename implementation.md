@@ -8,8 +8,8 @@
 ## Session log
 
 **Last session:** resumed 2026-05-26.
-**Current phase:** Phase 2 — all SQL migrations (0001–0005), TS scoring helpers, and 16 vitest specs landed. Pending: user applies migrations 0001–0005 to Supabase, then we test the RLS predicates + cap trigger directly in the DB, then run `doc-auditor`.
-**Schedule status:** Phases 0, 1, and the Phase 2 code all closed on 2026-05-26. Way ahead of the 4-day Phase 2 budget — DB verification + doc audit + Phase 3 can start in the next session.
+**Current phase:** Phase 3 — pool create/join, matches list, prediction form, palpites view all in. Awaiting end-to-end testing (sign up → create pool → predict → switch pool → predict again).
+**Schedule status:** Phases 0, 1, 2 (+ doc-audit follow-up), and Phase 3 code all on 2026-05-26 — way ahead of the original Phase 3 budget (Days 8-10, 2026-05-29 to 2026-05-31). Phase 4 (group/champion/bracket bets) next.
 
 ### What's done
 
@@ -183,19 +183,24 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 
 ---
 
-## Phase 3 — Pool create/join + match bets (Days 8-10: 2026-05-29 to 2026-05-31)
+## Phase 3 — Pool create/join + match bets (code done 2026-05-26) — 🟡 awaiting E2E test
 
 **Goal:** participants can create or join pools, switch between them, and submit/edit predictions for any scheduled match in the active pool.
 
-- [ ] Implement `/boloes/criar` — form with a `name` input, server action that creates the `pool` row with `admin_id = auth.uid()`, generates a unique invite code, inserts the creator into `pool_member`, sets the `active_pool_id` cookie, and redirects to `/jogos`
-- [ ] Implement `/boloes/entrar` — input for invite code, server action validates the code exists, the user is not already a member, and the 10-cap is respected (the trigger enforces it; UI shows a friendly error)
-- [ ] `lib/pool.ts` — implement `readActivePoolId()`, `assertMember(poolId, userId)`, `listMyPools()` helpers
-- [ ] Implement `components/local-time.tsx` — Client Component using `Intl.DateTimeFormat` + `date-fns-tz` to render UTC timestamps in the browser's TZ
-- [ ] Implement `/jogos` listing all matches grouped by date, kickoff via `<LocalTime />`, team flags, and a "Palpitar" CTA per match. Bets shown are filtered by the active pool.
-- [ ] Implement `/jogos/[matchId]` with two number inputs (home/away score), Zod validation, server action that reads active pool from cookie, calls `assertMember`, then saves
-- [ ] Show "Bloqueado" state when `now() >= kickoff_at`, displaying the saved prediction as read-only
-- [ ] Implement `/palpites` listing the user's predictions grouped by stage with edit links, scoped to the active pool
-- [ ] Add seed SQL for QA fixtures with past `kickoff_at` to test the locked state
+- [x] `/boloes/criar` — form + server action that generates a unique invite code (retries on collision), inserts pool + creator's pool_member row, sets `active_pool_id`, redirects to `/jogos`.
+- [x] `/boloes/entrar` — invite-code input + server action with Zod validation (`COPA-XXXX` format), friendly errors for "code not found", "already a member", "10-pool cap reached".
+- [x] `lib/pool.ts` — `readActivePoolId`, `setActivePoolCookie`, `listMyPools` (with member counts), `assertMember`, `generateInviteCode` (4-char alphanumeric).
+- [x] `components/local-time.tsx` — Client Component using `Intl.DateTimeFormat`. Initial paint is null (matches SSR); client effect fills in localised text. `suppressHydrationWarning` set explicitly.
+- [x] `/jogos` — all 104 matches grouped by São Paulo calendar date, kickoff via `<LocalTime />`, team names, status pill (Palpitar → / Palpite: X-Y / Aguardando placar / Resultado).
+- [x] `/jogos/[matchId]` — Server Component with two number inputs (0-20), Zod validation in the server action, reads active pool from cookie, calls `assertMember`, upserts into `bet_match` on `(user_id, pool_id, match_id)`.
+- [x] "Bloqueado" state — when `now() >= kickoff_at`, the prediction form is replaced with a read-only display of the saved prediction (or a "you didn't predict" message). Final match score shown when `status='finished'`.
+- [x] `/palpites` — user's predictions grouped by stage with edit links, scoped to the active pool. Empty state with a Jogos link.
+- [x] `PoolSwitcher` upgraded to a base-ui dropdown with switch action; middleware sets `active_pool_id` default to the user's most-recently-joined pool when the cookie is missing.
+
+**Pending (need user):**
+
+- [ ] **End-to-end test:** sign up a second test user, create a pool as user A, copy the invite code, log in as user B, join the pool, submit predictions in both pools, switch between them via the header dropdown, verify bets in each pool are independent.
+- [ ] (Optional) Add a seed SQL block for QA fixtures with past `kickoff_at` to exercise the locked state without waiting for real WC kickoff. Defer to Phase 8 polish if not needed now.
 
 **Verify:**
 - A test user creates a pool, becomes its admin, sees themself in the switcher.
