@@ -159,6 +159,15 @@ pnpm dev
 - [x] Migrations 0001–0005 applied to Supabase. Verified `select group_code, count(*) from team` returns 4 per group (×12) and `select stage, count(*) from match` returns the expected 72/16/8/4/2/1/1.
 - [x] `doc-auditor` subagent run. Findings triaged in the commit log; P0/P1 fixes applied in the same session (see "Phase 2 doc-audit follow-up" commit). Deferred DB-level verification (cap trigger, RLS predicates) — can be exercised in Phase 3 when real pool data exists.
 
+### Phase 1 password-reset addendum (2026-05-26)
+
+The original plan deferred password reset (`requirements.md` §6) on the assumption that the admin would reset via the Supabase dashboard. End-to-end testing surfaced that even the admin can't reliably do this without a `/recuperar/redefinir` page in the app, since Supabase's recovery email links land somewhere our app needs to handle. Brought back into MVP scope.
+
+- [ ] Build `/recuperar` (email input + server action calling `resetPasswordForEmail` with `redirectTo` pointing at `/auth/confirm?next=/recuperar/redefinir`). Always show the same success state regardless of whether the email exists (anti-enumeration).
+- [ ] Build `/recuperar/redefinir` — Server Component that checks for an authenticated session (recovery token already verified by `/auth/confirm`), renders a new-password form, action calls `supabase.auth.updateUser({ password })`.
+- [ ] Add an **"Esqueci minha senha"** link to `/entrar` pointing at `/recuperar`.
+- [ ] **Customize the Supabase recovery email template** (Authentication → Email Templates → "Reset Password") to use the PKCE `{{ .TokenHash }}` flow, pointing at `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/recuperar/redefinir`.
+
 ### Phase 2 doc-audit follow-up (2026-05-26)
 
 Tightening pass after the `doc-auditor` report. **All idempotent — user must re-apply `0002_rls.sql` and `0003_scoring.sql` in the Supabase SQL Editor for the changes to take effect.**

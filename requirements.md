@@ -44,7 +44,14 @@ All flows assume the user is using the web app in PT-BR.
 3. Receives a confirmation email and clicks the link.
 4. Logs in. If they have an invite code, they can paste it on the next screen; otherwise they land on an empty dashboard with a prompt to enter a code.
 
-**Password recovery** is out of scope for the MVP (see §6). If a user forgets their password, the admin asks Supabase to send a recovery email via the dashboard.
+### 3.1b Password recovery
+1. From `/entrar`, user clicks **"Esqueci minha senha"**.
+2. Lands on `/recuperar`, enters their email, submits.
+3. Receives a "Redefinir senha" email with a magic link (delivered through the same Resend SMTP wired in §3.1).
+4. Clicks the link → lands on `/recuperar/redefinir` with an authenticated short-lived session.
+5. Sets a new password (min 8 chars) → redirected to `/` (dashboard) as a logged-in user.
+
+To avoid leaking which emails are registered, the request form always returns a success message ("Se o email estiver cadastrado, você receberá um link") regardless of whether the email exists.
 
 ### 3.2 Create a pool (admin path)
 1. Any authenticated user clicks **"Criar bolão"** from the dashboard.
@@ -185,7 +192,6 @@ The following are **intentionally excluded** from this MVP and any near-term ite
 - Pool deletion via the UI (admin would ask via Supabase dashboard if needed).
 - Custom scoring per pool (the rules in §4.1 and §4.2 are global).
 - Social login (Google, etc.).
-- **Password reset / "forgot password" flow** — friends-only audience; admin resets via the Supabase dashboard if needed.
 - **Third-place playoff prediction** — the match still happens in WC 2026 but no bet table or scoring rule covers it.
 
 ## 7. MVP acceptance criteria
@@ -201,6 +207,7 @@ The MVP is considered complete when **all** of the following are demonstrably tr
 7. The ranking page of each pool reflects the correct order per §4.5 for that pool only.
 8. Any pool admin can enter or edit a match score via the admin panel; because match data is global (the score of Brazil vs Argentina is one fact), the update applies to every pool's bets on that match and points across all pools recalculate within 60 seconds. The trust model is that all pool admins are trusted friends.
 9. A user attempting to join an 11th pool is blocked with the PT-BR error in §4.6.
+10. A user who forgot their password can request a recovery email from `/recuperar`, click the link, set a new password, and log in — all within ~2 minutes.
 
 ## 8. Glossary
 

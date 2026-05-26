@@ -18,12 +18,25 @@ export default function EntrarPage() {
 
         <SignInForm />
 
-        <p className="text-center text-sm text-muted-foreground">
-          Ainda não tem conta?{" "}
-          <Link href="/cadastro" className="font-medium text-foreground underline-offset-4 hover:underline">
-            Criar conta
-          </Link>
-        </p>
+        <div className="space-y-2 text-center text-sm text-muted-foreground">
+          <p>
+            <Link
+              href="/recuperar"
+              className="underline-offset-4 hover:underline"
+            >
+              Esqueci minha senha
+            </Link>
+          </p>
+          <p>
+            Ainda não tem conta?{" "}
+            <Link
+              href="/cadastro"
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              Criar conta
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   );

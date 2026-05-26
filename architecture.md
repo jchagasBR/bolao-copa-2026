@@ -116,11 +116,13 @@ bolao-copa-2026/
 │       └── ci.yml                 # lint + typecheck + build
 ├── .vscode/                       # optional, recommended extensions
 ├── app/                           # Next.js App Router
-│   ├── entrar/page.tsx            # /entrar  (login)        — public
-│   ├── cadastro/page.tsx          # /cadastro               — public
-│   ├── cadastro/verifique-email/  # confirm-email landing   — public
-│   ├── auth/confirm/route.ts      # OTP/PKCE email callback — public
-│   ├── auth/signout/route.ts      # POST signout            — auth required
+│   ├── entrar/page.tsx            # /entrar  (login)              — public
+│   ├── cadastro/page.tsx          # /cadastro                     — public
+│   ├── cadastro/verifique-email/  # confirm-email landing         — public
+│   ├── recuperar/page.tsx         # /recuperar (request reset)    — public
+│   ├── recuperar/redefinir/       # /recuperar/redefinir (new pw) — public, valid only with a recovery session
+│   ├── auth/confirm/route.ts      # OTP/PKCE email callback       — public (signup + recovery)
+│   ├── auth/signout/route.ts      # POST signout                  — auth required
 │   ├── (app)/                     # authenticated routes (own / via middleware)
 │   │   ├── layout.tsx             # nav shell + <PoolSwitcher /> in header
 │   │   ├── page.tsx               # dashboard: list of "Meus bolões" + criar/entrar CTAs
@@ -504,6 +506,7 @@ There is no external sports data API. Match scores arrive in the system through 
 - **Sign up:** Supabase Auth, server action creates a `profile` row in the same transaction (via trigger on `auth.users`).
 - **Email confirmation:** required; Supabase sends via Resend SMTP.
 - **Login:** server action returns the session via cookies (`@supabase/ssr`).
+- **Password recovery:** `/recuperar` calls `supabase.auth.resetPasswordForEmail(email, { redirectTo: <APP_URL>/auth/confirm?next=/recuperar/redefinir })`. Supabase sends a magic link through the same Resend SMTP. The link hits `/auth/confirm` with `type=recovery`, which verifies the OTP and redirects to `/recuperar/redefinir` with a recovery session in cookies. That page lets the user call `supabase.auth.updateUser({ password })` then redirects to `/`. To avoid leaking email existence, the request page always shows the same success message regardless of whether the email is registered.
 - **Middleware** (`middleware.ts`): runs on `/(app)/:path*` and `/admin/:path*`. Responsibilities:
   1. Refresh the Supabase session.
   2. Redirect unauthenticated requests to `/entrar`.
