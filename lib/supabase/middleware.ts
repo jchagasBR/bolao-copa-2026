@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATH_PREFIXES = ["/entrar", "/cadastro", "/auth"];
+const ACTIVE_POOL_COOKIE = "active_pool_id";
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some(
@@ -50,6 +51,27 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  // Set a default active_pool_id when the cookie is missing — the user's most
+  // recently joined pool. Skipped on the auth pages and the /boloes/* flow
+  // (the join action sets the cookie itself).
+  if (user && !request.cookies.get(ACTIVE_POOL_COOKIE) && !isPublicPath(pathname)) {
+    const { data: membership } = await supabase
+      .from("pool_member")
+      .select("pool_id, joined_at")
+      .eq("user_id", user.id)
+      .order("joined_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (membership?.pool_id) {
+      response.cookies.set(ACTIVE_POOL_COOKIE, membership.pool_id, {
+        path: "/",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
   }
 
   return response;

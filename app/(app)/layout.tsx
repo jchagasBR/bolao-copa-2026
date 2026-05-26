@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { listMyPools, readActivePoolId } from "@/lib/pool";
 import { PoolSwitcher } from "@/components/pool-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { MobileNav } from "@/components/mobile-nav";
@@ -19,13 +20,14 @@ export default async function AppLayout({
     redirect("/entrar");
   }
 
-  const { data: profile } = await supabase
-    .from("profile")
-    .select("name")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, pools, activePoolId] = await Promise.all([
+    supabase.from("profile").select("name").eq("id", user.id).maybeSingle(),
+    listMyPools(),
+    readActivePoolId(),
+  ]);
 
   const displayName = profile?.name ?? user.email ?? "Você";
+  const switcherPools = pools.map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <>
@@ -35,7 +37,7 @@ export default async function AppLayout({
             Bolão Copa 2026
           </Link>
           <div className="flex items-center gap-3">
-            <PoolSwitcher pools={[]} />
+            <PoolSwitcher pools={switcherPools} activeId={activePoolId} />
             <UserMenu name={displayName} />
           </div>
         </div>
