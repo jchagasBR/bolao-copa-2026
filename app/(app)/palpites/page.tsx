@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { ChevronRight, Trophy, ListChecks, Layers } from "lucide-react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listMyPools, readActivePoolId } from "@/lib/pool";
 import { LocalTime } from "@/components/local-time";
+import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
   title: "Meus palpites — Bolão Copa 2026",
@@ -47,21 +49,33 @@ export default async function PalpitesPage() {
   if (pools.length === 0) {
     redirect("/");
   }
-
   const activeId = (await readActivePoolId()) ?? pools[0].id;
   const supabase = await createClient();
 
-  const { data: rows } = await supabase
-    .from("bet_match")
-    .select(
-      "home_score, away_score, match:match_id (id, stage, group_code, kickoff_at, home_team:home_team_id (name), away_team:away_team_id (name))",
-    )
-    .eq("pool_id", activeId)
-    .returns<Row[]>();
+  const [betRows, groupCount, champRow] = await Promise.all([
+    supabase
+      .from("bet_match")
+      .select(
+        "home_score, away_score, match:match_id (id, stage, group_code, kickoff_at, home_team:home_team_id (name), away_team:away_team_id (name))",
+      )
+      .eq("pool_id", activeId)
+      .returns<Row[]>(),
+    supabase
+      .from("bet_group")
+      .select("group_code", { count: "exact", head: true })
+      .eq("pool_id", activeId),
+    supabase
+      .from("bet_champion")
+      .select("team:team_id (name)")
+      .eq("pool_id", activeId)
+      .maybeSingle<{ team: { name: string } | null }>(),
+  ]);
 
-  const items = (rows ?? []).filter(
+  const items = (betRows.data ?? []).filter(
     (r): r is Row & { match: NonNullable<Row["match"]> } => r.match !== null,
   );
+  const filledGroups = groupCount.count ?? 0;
+  const championName = champRow.data?.team?.name ?? null;
 
   const byStage = new Map<string, typeof items>();
   for (const row of items) {
@@ -85,52 +99,123 @@ export default async function PalpitesPage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Meus palpites</h1>
         <p className="text-sm text-muted-foreground">
-          Todos os seus palpites no bolão ativo. Clique pra editar (até o início
-          do jogo).
+          Palpites no bolão ativo. Clique pra editar (até o prazo de cada fase).
         </p>
       </header>
 
-      {items.length === 0 ? (
-        <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-          Você ainda não palpitou nenhum jogo neste bolão.{" "}
-          <Link href="/jogos" className="font-medium text-foreground underline-offset-4 hover:underline">
-            Ver jogos →
-          </Link>
-        </div>
-      ) : (
-        sortedStages.map((stage) => (
-          <section key={stage} className="space-y-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {STAGE_TITLE[stage] ?? stage}
-            </h2>
-            <ul className="divide-y rounded-lg border bg-card">
-              {byStage.get(stage)!.map((row) => (
-                <li key={row.match.id}>
-                  <Link
-                    href={`/jogos/${row.match.id}`}
-                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/40"
-                  >
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        <LocalTime utc={row.match.kickoff_at} />
-                        {row.match.group_code ? ` · Grupo ${row.match.group_code}` : ""}
-                      </p>
-                      <p className="text-sm font-medium truncate">
-                        {row.match.home_team?.name ?? "?"}{" "}
-                        <span className="text-muted-foreground">×</span>{" "}
-                        {row.match.away_team?.name ?? "?"}
-                      </p>
-                    </div>
-                    <span className="text-base font-semibold tabular-nums">
-                      {row.home_score} – {row.away_score}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
+      <section className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Bônus
+        </h2>
+        <ul className="space-y-2">
+          <li>
+            <Link
+              href="/palpites/grupos"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-muted/40"
+            >
+              <Layers className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <p className="text-sm font-medium">Fase de grupos</p>
+                <p className="text-xs text-muted-foreground">
+                  1º (+5 pts) e 2º (+3 pts) de cada um dos 12 grupos
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {filledGroups} / 12
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/palpites/campeao"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-muted/40"
+            >
+              <Trophy className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <p className="text-sm font-medium">Campeão da Copa</p>
+                <p className="text-xs text-muted-foreground">
+                  +20 pts se você acertar
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                {championName ?? "—"}
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/palpites/mata-mata"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-muted/40"
+            >
+              <ListChecks className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <p className="text-sm font-medium">Mata-mata</p>
+                <p className="text-xs text-muted-foreground">
+                  Abre depois do fim da fase de grupos
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+            </Link>
+          </li>
+        </ul>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Por jogo
+        </h2>
+
+        {items.length === 0 ? (
+          <Card>
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              Você ainda não palpitou nenhum jogo neste bolão.{" "}
+              <Link
+                href="/jogos"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Ver jogos →
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          sortedStages.map((stage) => (
+            <section key={stage} className="space-y-1">
+              <h3 className="text-xs font-medium text-muted-foreground">
+                {STAGE_TITLE[stage] ?? stage}
+              </h3>
+              <ul className="divide-y rounded-lg border bg-card">
+                {byStage.get(stage)!.map((row) => (
+                  <li key={row.match.id}>
+                    <Link
+                      href={`/jogos/${row.match.id}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/40"
+                    >
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          <LocalTime utc={row.match.kickoff_at} />
+                          {row.match.group_code
+                            ? ` · Grupo ${row.match.group_code}`
+                            : ""}
+                        </p>
+                        <p className="text-sm font-medium truncate">
+                          {row.match.home_team?.name ?? "?"}{" "}
+                          <span className="text-muted-foreground">×</span>{" "}
+                          {row.match.away_team?.name ?? "?"}
+                        </p>
+                      </div>
+                      <span className="text-base font-semibold tabular-nums">
+                        {row.home_score} – {row.away_score}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
+        )}
+      </section>
     </main>
   );
 }
