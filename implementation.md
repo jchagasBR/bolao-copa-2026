@@ -8,8 +8,8 @@
 ## Session log
 
 **Last session:** resumed 2026-05-26.
-**Current phase:** Phase 0 — Supabase project now live (region `eu-central-1`); Resend + Vercel external steps still pending.
-**Schedule status:** ~3 days behind the original Phase 0 schedule (Day 1 → now Day 5), but Phase 6 freed 1 day and the buffer day (06-09) absorbs the rest. Still on track for 2026-06-11 launch.
+**Current phase:** Phase 1 — auth flow built locally (sign-up, login, email confirmation, dashboard shell). Pending: apply `0001_init.sql` migration to Supabase, customize the PT-BR email template, manual end-to-end test of the sign-up flow.
+**Schedule status:** ~3 days behind the original Phase 0 schedule, but Phase 1's main code is now in. Phase 6 freed 1 day and the buffer day (06-09) absorbs the rest. Still on track for 2026-06-11 launch.
 
 ### What's done
 
@@ -106,19 +106,33 @@ pnpm dev
 
 ---
 
-## Phase 1 — Auth and navigation shell (Days 2-3: 2026-05-23 to 2026-05-24)
+## Phase 1 — Auth and navigation shell (Days 2-3: 2026-05-23 to 2026-05-24) — 🟡 code in, manual setup + test pending
 
 **Goal:** users can sign up, confirm email, log in, and see the "Meus bolões" dashboard with a path to create or join a pool.
 
 - [x] ~~Configure Resend as Supabase Auth SMTP~~ — _done in Phase 0, 2026-05-26_
-- [ ] Customize Supabase Auth email templates in PT-BR (confirmation only; reset template stays default since the flow is out of scope)
-- [ ] Build PT-BR pages: `/cadastro` (sign up), `/entrar` (login)
-- [ ] Implement server actions for sign up / login / logout
-- [ ] Add a Postgres trigger that inserts a `profile` row whenever `auth.users` gets a new row
-- [ ] Implement `middleware.ts` to protect `(app)/*` and `admin/*`, refresh sessions, and **set the `active_pool_id` cookie** to the user's first membership when missing (see architecture §6)
-- [ ] Build authenticated layout `app/(app)/layout.tsx` with header (logo + `<PoolSwitcher />` + user menu) and mobile bottom nav (Início, Jogos, Palpites, Ranking, Perfil)
-- [ ] Implement `components/pool-switcher.tsx` — Client Component listing the user's pools, writes `active_pool_id` cookie on selection, navigates to `/jogos`
-- [ ] Dashboard at `/` showing "Meus bolões" (list of memberships with name, member count, your rank) + "+ Criar bolão" + "+ Entrar em bolão" CTAs
+- [ ] **Apply `supabase/migrations/0001_init.sql` via Supabase SQL Editor** (creates the `profile` table, RLS policy, and `auth.users → profile` trigger). See `supabase/README.md` for steps.
+- [ ] **Customize the Supabase confirmation email template** to use the PKCE/OTP flow that hits our `/auth/confirm` route. In Supabase dashboard → Authentication → Email Templates → "Confirm signup", replace the body with:
+
+  ```html
+  <h2>Bolão Copa 2026</h2>
+  <p>Olá! Clique no botão abaixo para confirmar seu email e começar a palpitar:</p>
+  <p>
+    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/"
+       style="display:inline-block;padding:10px 16px;background:#171717;color:#fff;text-decoration:none;border-radius:6px;">
+      Confirmar email
+    </a>
+  </p>
+  <p style="color:#666;font-size:13px;">Se você não criou esta conta, ignore este email.</p>
+  ```
+
+- [x] Build PT-BR pages: `/cadastro` (sign up), `/entrar` (login)
+- [x] Implement server actions for sign up / login / logout (`app/cadastro/actions.ts`, `app/entrar/actions.ts`, `app/auth/signout/route.ts`)
+- [x] Add a Postgres trigger that inserts a `profile` row whenever `auth.users` gets a new row — _in `0001_init.sql`, applied to Supabase manually_
+- [x] Implement `middleware.ts` to protect `(app)/*` and `admin/*`, refresh sessions — _`active_pool_id` cookie default deferred to Phase 3 when pool data exists_
+- [x] Build authenticated layout `app/(app)/layout.tsx` with header (logo + `<PoolSwitcher />` + user menu) and mobile bottom nav (Início, Jogos, Palpites, Ranking, Perfil)
+- [x] Implement `components/pool-switcher.tsx` — _stub: renders "Sem bolões" placeholder; Phase 3 will populate it_
+- [x] Dashboard at `/` showing "Meus bolões" (list of memberships with name, member count, your rank) + "+ Criar bolão" + "+ Entrar em bolão" CTAs — _list is empty for now (no pool data); CTAs route to `/boloes/criar` and `/boloes/entrar` which are Phase 3 routes_
 
 **Verify:**
 - Create an account, receive and click the confirmation email, log in, see the dashboard with zero pools and the create/join CTAs, log out — full round trip works.
