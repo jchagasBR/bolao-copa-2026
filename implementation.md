@@ -8,8 +8,8 @@
 ## Session log
 
 **Last session:** resumed 2026-05-26.
-**Current phase:** Phase 3 — pool create/join, matches list, prediction form, palpites view all in. Awaiting end-to-end testing (sign up → create pool → predict → switch pool → predict again).
-**Schedule status:** Phases 0, 1, 2 (+ doc-audit follow-up), and Phase 3 code all on 2026-05-26 — way ahead of the original Phase 3 budget (Days 8-10, 2026-05-29 to 2026-05-31). Phase 4 (group/champion/bracket bets) next.
+**Current phase:** Phase 4 — group-standings + champion bet UIs in, mata-mata as a placeholder, bonus storage + recompute_bonuses for group/champion live. Multi-user E2E deferred until Phase 9 (Resend custom domain).
+**Schedule status:** Phases 0–4 code all done 2026-05-26 — well ahead of the original "Day 11: 2026-06-01" Phase 4 budget. Phase 5 (ranking + personal views) is next.
 
 ### What's done
 
@@ -230,16 +230,26 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 
 ---
 
-## Phase 4 — Group-stage, bracket, and champion bets (Day 11: 2026-06-01)
+## Phase 4 — Group-stage, bracket, and champion bets (code done 2026-05-26) — 🟡 awaiting DB apply
 
 **Goal:** all non-match bet types are functional before WC kickoff. Compressed to 1 day — groups/champion are simple forms; bracket is a skeleton (real bracket UI can ship between end of group stage and R32 if needed).
 
-- [ ] Implement `/palpites/grupos` with a section per group showing the 4 teams and two dropdowns (1st, 2nd)
-- [ ] Validation: the two picks within a group must be different teams (DB `CHECK` plus client validation)
-- [ ] Implement `/palpites/campeao` with a single team picker over all 48 teams
-- [ ] Bracket page `/palpites/mata-mata` skeleton — shows "Aguardando classificados" placeholder until 06-28; real bracket UI deferred to a follow-up before the first R32 kickoff
-- [ ] Implement bonus scoring inside `recompute_bonuses(pool_id uuid)` using the values signed off in Phase 0
-- [ ] Wire `recompute_bonuses` to be called by the cron when the group stage ends and after each knockout round closes
+- [x] `/palpites/grupos` — server-side page reads 48 teams + existing `bet_group` rows + `first_kickoff` deadline; client form renders a fieldset per group with two `<select>`s. Save action validates 12×2 picks (different teams per group), upserts all 12 in one round-trip. Read-only once the deadline passes.
+- [x] Validation: same-team-twice rejected by Zod-equivalent server check + DB CHECK on `bet_group`.
+- [x] `/palpites/campeao` — single team picker grouped by group A-L via `<optgroup>`. Saves to `bet_champion`.
+- [x] `/palpites/mata-mata` — placeholder card with the R32 kickoff date and the +3/+5/+8/+12 bonus values. Real bracket UI deferred to a follow-up before 2026-06-28.
+- [x] `/palpites` hub — links to grupos / campeao / mata-mata with status counters (e.g. "8 / 12") and the existing match-bet list below.
+- [x] `recompute_bonuses(p_pool_id uuid)` — implemented in `supabase/migrations/0007_bonus.sql` for the cases that can be computed today:
+  - Group 1st place (+5) and 2nd place (+3) — once a group's six matches are all finished. Uses the new `compute_group_standings()` helper.
+  - Champion (+20) — once the final has `status='finished'`.
+  - Knockout-round bonuses (+3/+5/+8/+12) deferred — they need knockout match home/away teams populated by the admin, which happens after group stage finishes.
+- [x] Bonus storage — new `bonus` table with `(user_id, pool_id, kind, points)`. `pool_ranking` view UNIONs `score` + `bonus` so the leaderboard sums both.
+
+**Pending (need user / DB):**
+
+- [ ] **Apply `supabase/migrations/0007_bonus.sql` in the Supabase SQL Editor.** Idempotent.
+- [ ] Wire `recompute_bonuses` to be called by the admin score-entry action (Phase 6) after each match update — currently only `recompute_match` is called. Add the call when Phase 6 lands.
+- [ ] **Run `doc-auditor` subagent** at end of Phase 4 per the original plan. Address any P0/P1 items before Phase 5.
 
 **Verify:**
 - A participant completes group bets + champion in under 5 minutes.
