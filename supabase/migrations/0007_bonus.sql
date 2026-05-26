@@ -55,7 +55,7 @@ group by ap.pool_id, ap.user_id, p.name;
 -- FIFA ranking, draw of lots) is out of scope for the MVP — extremely rare in
 -- practice and would require either admin override or a much larger function.
 create or replace function public.compute_group_standings()
-returns table(group_code char(1), team_id uuid, position int)
+returns table(group_code char(1), team_id uuid, place int)
 language sql
 stable
 security definer
@@ -102,7 +102,7 @@ as $$
     row_number() over (
       partition by group_code
       order by points desc, gd desc, gf_total desc, name asc
-    )::int as position
+    )::int as place
   from team_aggregates;
 $$;
 
@@ -129,7 +129,7 @@ begin
   from public.bet_group bg
   join public.compute_group_standings() s
     on s.group_code = bg.group_code
-   and s.position = 1
+   and s.place = 1
    and s.team_id = bg.first_team_id
   where bg.pool_id = p_pool_id
   on conflict (user_id, pool_id, kind) do update
@@ -147,7 +147,7 @@ begin
   from public.bet_group bg
   join public.compute_group_standings() s
     on s.group_code = bg.group_code
-   and s.position = 2
+   and s.place = 2
    and s.team_id = bg.second_team_id
   where bg.pool_id = p_pool_id
   on conflict (user_id, pool_id, kind) do update
