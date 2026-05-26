@@ -7,36 +7,46 @@
 
 ## Session log
 
-**Last session:** resumed 2026-05-26.
-**Current phase:** Phase 5 — ranking page (live, sorted with tie-breaks), perfil with per-pool stats, post-kickoff peer predictions on /jogos/[matchId]. Awaiting user to apply 0009_realtime.sql and exercise the live-update path.
-**Schedule status:** Phases 0–5 code all done 2026-05-26 — well ahead of the original "Days 12-13: 2026-06-02 to 2026-06-03" Phase 5 budget. Phase 6 (admin score entry + finals-on-penalties handling) is next.
+**Last session ended:** 2026-05-26 — user paused after Phase 5 was verified live (predicted a match, ran `recompute_match` via SQL Editor, watched `/ranking` populate).
+**Current phase:** Phase 5 ✅ verified. Phase 6 (admin score entry) is next.
+**Schedule status:** Phases 0 through 5 all finished on 2026-05-26 — original plan budgeted Days 1–13 (2026-05-22 through 2026-06-03) for this work. **About 8 days ahead of plan.** 16 days until WC kickoff (2026-06-11).
 
-### What's done
+### Done (in order, with the commit that closed each piece)
 
-- All local Phase 0 deliverables (toolchain, scaffold, deps, shadcn, landing page, CI workflow).
-- Public GitHub repo live at **https://github.com/jchagasBR/bolao-copa-2026**.
-- Two commits on `main`, both pushed and CI-green:
-  - `1589b0e` — chore: bootstrap project (Phase 0)
-  - `b952b40` — docs: drop API-Football, switch to manual admin score entry
-- gh CLI authenticated as `jchagasBR` with `workflow` scope.
-- Three founding docs and `doc-auditor` subagent in place.
-- **Strategy change:** dropped API-Football (free tier excludes WC 2026); match scores will be entered manually by pool admins. Phase 6 shrank from 2 days to 1.
+| Phase | Status | Notes |
+|---|---|---|
+| **0** — Setup | 🟢 | Toolchain, scaffold, deps, shadcn (base-nova), CI, placeholder landing, founding docs, doc-auditor agent, Supabase + Resend + SMTP wired, Gmail deliverability verified. |
+| **1** — Auth + nav shell | 🟢 | `/cadastro`, `/entrar`, `/auth/confirm`, `/auth/signout`, middleware, authenticated layout, mobile bottom nav, dashboard, `auth.users → profile` trigger. End-to-end verified. |
+| **1.5** — Password reset addendum | 🟢 | `/recuperar`, `/recuperar/redefinir`, "Esqueci minha senha" link on `/entrar`. Rescoped into MVP after end-to-end testing surfaced the case where even the admin couldn't recover. |
+| **2** — Schema + RLS + scoring | 🟢 | 0001 (full schema) + 0002 (RLS) + 0003 (`compute_match_points`, `recompute_match`, `bet_match_locked` trigger) + 0004 (48 teams) + 0005 (104 fixtures with UTC kickoffs). 16 vitest specs cover scoring + tie-breaks. doc-auditor pass + follow-up (DELETE arm on `bet_match_locked`, `pool_id` membership guard on `bet_*` WITH CHECK). |
+| **3** — Pool create/join + match bets | 🟢 | `/boloes/criar`, `/boloes/entrar`, real `PoolSwitcher` dropdown, `lib/pool.ts` queries, `<LocalTime />`, `/jogos`, `/jogos/[matchId]`, `/palpites`. RLS recursion fix in 0006. |
+| **4** — Group + champion + bracket placeholder | 🟢 | `/palpites/grupos`, `/palpites/campeao`, `/palpites/mata-mata` placeholder, `/palpites` hub. 0007 bonus table + `compute_group_standings()` + group/champion `recompute_bonuses`. 0008 makes it idempotent under score corrections. doc-auditor pass. |
+| **5** — Ranking + perfil + peer predictions | 🟢 | `/ranking` (live via Realtime), `/perfil` (per-pool stats), `/jogos/[matchId]` post-kickoff peer predictions card. 0009 opted `score` + `bonus` into the realtime publication. User verified live ranking refresh. |
 
-### Outstanding external/manual work
+All 9 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`). The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
 
-Only one external item is still pending. Everything else through Phase 2 is done.
+### Outstanding manual / external work
 
-- **Vercel project + production URL** _(deferred; Phase 3 can still proceed locally)._ Import the GitHub repo, paste env vars, trigger a first deploy → that URL becomes `APP_URL`.
-- **Custom Resend domain** _(blocker before Phase 9 launch only)._ The sandbox sender only delivers to the Resend account owner's email; a verified domain unblocks invitations to all friends. See [[project-resend-sandbox-limit]].
+Nothing blocks Phase 6 code. The carry-overs:
+
+1. **Customize Supabase recovery email template** — Phase 1 password-reset code is live but the Supabase dashboard template still uses the default link shape, so clicking the recovery link won't land on our `/recuperar/redefinir`. Template body to paste lives under "Phase 1 password-reset addendum" below.
+2. **Vercel project + production URL** — Phase 9 blocker, not earlier. Import the GitHub repo, paste env vars, deploy.
+3. **Custom Resend domain** — Phase 9 blocker. Sandbox sender (`onboarding@resend.dev`) only delivers to `j.cesarchagas94@gmail.com`. See `[[project-resend-sandbox-limit]]` in memory.
+4. **Branch protection on `main`** — defer until after Phase 6 (CI status check name needs to exist).
 
 ### First action when resuming
 
-When ready, paste the Supabase/Resend/Vercel values to Claude. Claude will then:
-1. Write `.env.local` with the real values
-2. Verify `pnpm dev` connects to Supabase (sanity check)
-3. Move directly into **Phase 1** (auth pages, middleware, pool dashboard, pool switcher)
+1. `git pull --ff-only` (the resume agent's machine might be behind if it was synced earlier).
+2. `pnpm install` if `node_modules` looks stale.
+3. `pnpm dev` to bring the local server up at `http://localhost:3000`.
+4. Open MEMORY.md (loaded automatically) and skim this section for context.
+5. Start **Phase 6** unless the user redirects. The first task is the admin form at `/admin/jogos/[matchId]` — read the Phase 6 section below for the checklist.
 
-If you want to do Phase 1 *before* all three accounts exist: Supabase is the only hard requirement (auth needs it). Resend can be deferred until you want real confirmation emails (Supabase Auth will use its low-rate default until SMTP is configured). Vercel can be deferred until you want a public preview URL.
+### Phase 6 dependencies — read before starting
+
+- **`winner_team_id` column on `match`** — Phase 4 doc-audit flagged that finals decided on penalties produce no champion bonus because the CASE in `recompute_bonuses` can't pick a winner when `home_score = away_score`. Add a nullable `winner_team_id uuid references team(id)` column to `match` (new migration). For group matches, leave it NULL (the score is decisive). For knockout matches, the admin form requires it. Update `recompute_bonuses` to use `winner_team_id` instead of the score-comparison CASE.
+- **`recompute_bonuses` call site** — Phase 4 left this unwired. Phase 6's admin score-entry action calls `recompute_match` *and* `recompute_bonuses` in the same server action, after the `UPDATE match … set home_score=…, status='finished'`.
+- **Admin guard** — `/admin/jogos/[matchId]` should `notFound()` for users who aren't admin of any pool. Check via `exists (select 1 from pool where admin_id = auth.uid())` per `architecture.md` §6.
 
 ### Useful refresh commands for the next session
 
@@ -47,11 +57,29 @@ $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';'
 # Sanity check the toolchain
 node --version; pnpm --version; git --version; gh --version
 
-# Pull latest (in case of any GitHub-side edits)
+# Pull latest
 git pull --ff-only
+
+# Sanity-check the existing build
+pnpm typecheck; pnpm lint; pnpm test; pnpm build
 
 # Local dev server
 pnpm dev
+```
+
+### How to drive an end-to-end test of any phase without waiting for real WC matches
+
+```sql
+-- Fake-finish a match you have a bet_match row against
+update public.match
+set home_score = 2, away_score = 1, status = 'finished'
+where external_id = 1;  -- MEX vs RSA, kicks off 2026-06-11
+
+-- Push the score into the score table
+select public.recompute_match((select id from public.match where external_id = 1));
+
+-- After enough fixtures are finished to close a group, also:
+select public.recompute_bonuses((select pool_id from public.pool_member where user_id = auth.uid() limit 1));
 ```
 
 ---
