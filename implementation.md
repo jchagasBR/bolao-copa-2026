@@ -8,8 +8,8 @@
 ## Session log
 
 **Last session:** resumed 2026-05-26.
-**Current phase:** Phase 1 ✅ verified end-to-end (sign-up → email confirmation → dashboard → sign-out → sign-in). Ready for Phase 2.
-**Schedule status:** Phases 0 and 1 done on the same day (2026-05-26). Phase 2 (4-day budget) starts next. Phase 6 freed 1 day and the buffer day (06-09) absorbs any further slip. Still on track for 2026-06-11 launch.
+**Current phase:** Phase 2 — all SQL migrations (0001–0005), TS scoring helpers, and 16 vitest specs landed. Pending: user applies migrations 0001–0005 to Supabase, then we test the RLS predicates + cap trigger directly in the DB, then run `doc-auditor`.
+**Schedule status:** Phases 0, 1, and the Phase 2 code all closed on 2026-05-26. Way ahead of the 4-day Phase 2 budget — DB verification + doc audit + Phase 3 can start in the next session.
 
 ### What's done
 
@@ -142,24 +142,32 @@ pnpm dev
 
 ---
 
-## Phase 2 — Data model and seed (Days 4-7: 2026-05-25 to 2026-05-28)
+## Phase 2 — Data model and seed (code done 2026-05-26) — 🟡 awaiting DB apply + doc audit
 
 **Goal:** schema, RLS, and scoring are in place and exercised. Extended to 4 days — the RLS predicates and the 104-fixture seed each consume ~1 day and need real testing.
 
-- [ ] Write `supabase/migrations/0001_init.sql` with all tables, enums, indexes, and the `pool_ranking` view from §4 of `architecture.md`
-- [ ] Write `supabase/migrations/0002_rls.sql` enabling RLS and adding the concrete predicates from §4.2 (`profile`, `pool`, `pool_member`, `bet_match`, `bet_group`, `bet_knockout`, `bet_champion`, `score`, `reminder_sent`, plus the public-read policies for `team` and `match`) and the helper views `first_kickoff` and `first_r32_kickoff`
-- [ ] Include the `enforce_pool_member_cap()` function and trigger in the init migration (rejects an 11th membership with PT-BR error)
-- [ ] Write `supabase/migrations/0003_scoring.sql` with:
-  - SQL function `compute_match_points(predicted_h, predicted_a, actual_h, actual_a) returns smallint`
-  - SQL function `recompute_match(match_id uuid) returns void` (idempotent upsert into `score`, sets tiebreaker flags)
-  - SQL function `recompute_bonuses(pool_id uuid) returns void` (stub: bonus rules wired in Phase 4)
-  - Trigger `bet_match_locked` on `bet_match` (writes after kickoff rejected)
-- [ ] **Source the official FIFA WC 2026 schedule** (decide source in this phase: FIFA's public JSON, an Excel export, or scrape — document choice in a comment in the migration)
-- [ ] Write `supabase/migrations/0004_seed_teams_groups.sql` with the 48 WC 2026 teams and their group letters (A-L)
-- [ ] Write `supabase/migrations/0005_seed_matches.sql` with all 104 fixtures and `kickoff_at` from the chosen source
-- [ ] Implement `lib/scoring/match.ts` mirroring `compute_match_points` in TypeScript (so the UI can preview points)
-- [ ] Implement `lib/scoring/ranking.ts` with the tie-break logic per `requirements.md` §4.5
-- [ ] Write vitest tests covering all four scoring branches and tie-break scenarios
+- [x] Write `supabase/migrations/0001_init.sql` with all tables, enums, indexes, and the `pool_ranking` view from §4 of `architecture.md`
+- [x] Write `supabase/migrations/0002_rls.sql` enabling RLS and adding the concrete predicates from §4.2 (`profile`, `pool`, `pool_member`, `bet_match`, `bet_group`, `bet_knockout`, `bet_champion`, `score`, plus the public-read policies for `team` and `match`); helper views `first_kickoff` and `first_r32_kickoff` live in `0001_init.sql` so RLS predicates can reference them.
+- [x] Include the `enforce_pool_member_cap()` function and trigger in the init migration (rejects an 11th membership with PT-BR error)
+- [x] Write `supabase/migrations/0003_scoring.sql` with `compute_match_points`, `recompute_match` (idempotent upsert into `score` with tiebreaker flags), `recompute_bonuses` stub, and the `bet_match_locked` trigger
+- [x] **Source the official FIFA WC 2026 schedule** — chose Wikipedia (per-group articles + the dedicated knockout-stage article). Documented as a header comment in `0005_seed_matches.sql`.
+- [x] Write `supabase/migrations/0004_seed_teams_groups.sql` with the 48 WC 2026 teams and their group letters (A-L)
+- [x] Write `supabase/migrations/0005_seed_matches.sql` with all 104 fixtures; group-stage with assigned teams, knockout (73-104) with NULL teams until the admin populates them.
+- [x] Implement `lib/scoring/match.ts` mirroring `compute_match_points` in TypeScript
+- [x] Implement `lib/scoring/ranking.ts` with the tie-break logic per `requirements.md` §4.5
+- [x] Write vitest tests — **16 tests** in `tests/scoring.spec.ts` covering all 4 match-scoring branches + ranking tie-breaks; `vitest.config.ts` added so `@/` alias resolves in tests.
+
+**Pending (need user / DB):**
+
+- [ ] **Apply migrations 0001–0005 in order via Supabase SQL Editor.** 0001 is a re-run of the Phase 1 file (idempotent), then 0002–0005 are new. See `supabase/README.md` for ordering.
+- [ ] **Manual DB test:** insert a fake match score via SQL, call `recompute_match(...)`, verify `score` rows are produced. Call it again, verify result is identical (idempotency).
+- [ ] **Manual DB test:** seed two test users in two pools, insert 10 pool_member rows for one user, verify the 11th INSERT is rejected with the PT-BR error.
+- [ ] **Manual DB test:** logged-in-as-A, try to SELECT user-B's `bet_match` for a future match — should return zero rows. Same query for a past match — should succeed.
+- [ ] **Run `doc-auditor` subagent** to surface drift between code and the three founding docs.
+
+### Note on the §4.1 example
+
+The rule table in `requirements.md` §4.1 says "Correct winner + correct goal difference → 7 pts" and "Correct winner only → 5 pts". The illustrative example with "Brasil 1-0 Argentina → 5 pts" against actual 2-1 is **mathematically inconsistent** with that rule, because 1-0 and 2-1 have the same goal difference (+1) — the rule would award 7 pts. The implementation follows the **rule table** (the canonical statement), not the example. This means any predicted draw against any actual draw (e.g. 1-1 prediction vs 4-4 actual) scores 7 pts.
 
 **Verify:**
 - `pnpm test` passes with ≥10 scoring tests.
