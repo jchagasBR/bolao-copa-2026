@@ -8,8 +8,8 @@
 ## Session log
 
 **Last session:** resumed 2026-05-26.
-**Current phase:** Phase 4 — group-standings + champion bet UIs in, mata-mata as a placeholder, bonus storage + recompute_bonuses for group/champion live. Multi-user E2E deferred until Phase 9 (Resend custom domain).
-**Schedule status:** Phases 0–4 code all done 2026-05-26 — well ahead of the original "Day 11: 2026-06-01" Phase 4 budget. Phase 5 (ranking + personal views) is next.
+**Current phase:** Phase 5 — ranking page (live, sorted with tie-breaks), perfil with per-pool stats, post-kickoff peer predictions on /jogos/[matchId]. Awaiting user to apply 0009_realtime.sql and exercise the live-update path.
+**Schedule status:** Phases 0–5 code all done 2026-05-26 — well ahead of the original "Days 12-13: 2026-06-02 to 2026-06-03" Phase 5 budget. Phase 6 (admin score entry + finals-on-penalties handling) is next.
 
 ### What's done
 
@@ -267,13 +267,20 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 
 ---
 
-## Phase 5 — Ranking and personal views (Days 12-13: 2026-06-02 to 2026-06-03)
+## Phase 5 — Ranking and personal views (code done 2026-05-26) — 🟡 awaiting realtime apply + E2E test
 
 **Goal:** results visibility is live.
 
-- [ ] Implement `/ranking` reading the `pool_ranking` view (already created in Phase 2); subscribe to `score` via Supabase Realtime to refetch on changes
-- [ ] Implement `/perfil` showing total points, position, and the list of personal predictions (no chart — cosmetic, cut from MVP)
-- [ ] Implement `/jogos/[matchId]` "post-kickoff" mode showing every member's prediction and points earned
+- [x] `/ranking` — Server Component reads `pool_ranking` for the active pool, runs through `sortRanking()` (requirements §4.5 tie-breaks: points → exact_count → correct_winner_count → name asc), renders a numbered list highlighting the caller's row. A client-side `<RankingLive />` subscribes to `postgres_changes` on `score` and `bonus` filtered by `pool_id` and calls `router.refresh()` on every event — the page re-renders within ~1s of an admin score write.
+- [x] `/perfil` — shows the user's display name + email, then a card per pool with position (`Nº de M`), total points, exact-score count, correct-winner count, plus a crown icon when the user is admin. The active pool is highlighted. One pool_ranking SELECT per pool — capped at 10 by the membership cap, fine for the MVP.
+- [x] `/jogos/[matchId]` post-kickoff — after the kickoff timestamp passes, the page also fetches every member's bet_match row for the same pool + the corresponding score rows, and renders a "Palpites do bolão" card showing each prediction, the point value earned, and a "Cravou! / Acertou o vencedor / Errou" label. RLS (`bm_peer_after_kickoff`) makes this safe — peer bets are only visible after kickoff.
+- [x] `0009_realtime.sql` — opts the `score` and `bonus` tables into the `supabase_realtime` publication so the ranking page actually receives events. Idempotent (`DO`-block check against `pg_publication_tables`).
+
+**Pending (need user):**
+
+- [ ] **Apply `supabase/migrations/0009_realtime.sql` in the Supabase SQL Editor.** Without this, the ranking page works on every reload but doesn't update live.
+- [ ] **E2E test:** create at least two `bet_match` rows in the same pool (via the UI), then in the SQL Editor `update match set home_score = 2, away_score = 1, status = 'finished' where external_id = 1; select recompute_match((select id from match where external_id = 1));` — open `/ranking` and watch the points appear without a manual refresh.
+- [ ] **Tie-break verification:** seed a scenario with two users tied on points but different `exact_count` — verify the higher-exact user ranks first.
 
 **Verify:**
 - Admin updates a test match score via SQL + `recompute_match(...)`; ranking page reorders within 60 seconds without a manual refresh.

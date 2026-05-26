@@ -61,6 +61,53 @@ export default async function MatchPage({
   const homeName = match.home_team?.name ?? "A definir";
   const awayName = match.away_team?.name ?? "A definir";
 
+  type PeerRow = {
+    user_id: string;
+    home_score: number;
+    away_score: number;
+    profile: { name: string } | null;
+  };
+  type ScoreRow = {
+    user_id: string;
+    points: number;
+    is_exact_score: boolean;
+    is_correct_winner: boolean;
+  };
+
+  let peerBets: PeerRow[] = [];
+  let scoreByUser = new Map<string, ScoreRow>();
+  const {
+    data: { user: me },
+  } = await supabase.auth.getUser();
+
+  if (locked) {
+    const [peerResult, scoreResult] = await Promise.all([
+      supabase
+        .from("bet_match")
+        .select("user_id, home_score, away_score, profile:user_id (name)")
+        .eq("match_id", match.id)
+        .eq("pool_id", activeId)
+        .returns<PeerRow[]>(),
+      supabase
+        .from("score")
+        .select("user_id, points, is_exact_score, is_correct_winner")
+        .eq("match_id", match.id)
+        .eq("pool_id", activeId)
+        .returns<ScoreRow[]>(),
+    ]);
+    peerBets = peerResult.data ?? [];
+    scoreByUser = new Map(
+      (scoreResult.data ?? []).map((s) => [s.user_id, s]),
+    );
+    // sort: highest points first, then alphabetical
+    peerBets.sort((a, b) => {
+      const pa = scoreByUser.get(a.user_id)?.points ?? -1;
+      const pb = scoreByUser.get(b.user_id)?.points ?? -1;
+      if (pa !== pb) return pb - pa;
+      return (a.profile?.name ?? "").localeCompare(b.profile?.name ?? "", "pt-BR");
+    });
+  }
+
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-6">
       <p className="text-sm">
@@ -151,6 +198,57 @@ export default async function MatchPage({
           )}
         </CardContent>
       </Card>
+
+      {locked && peerBets.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Palpites do bolão</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            <ul className="divide-y">
+              {peerBets.map((row) => {
+                const sc = scoreByUser.get(row.user_id);
+                const isMe = row.user_id === me?.id;
+                return (
+                  <li
+                    key={row.user_id}
+                    className={
+                      "flex items-center gap-3 px-4 py-2 " +
+                      (isMe ? "bg-primary/5" : "")
+                    }
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {row.profile?.name ?? "—"}
+                        {isMe && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (você)
+                          </span>
+                        )}
+                      </p>
+                      {sc && (
+                        <p className="text-xs text-muted-foreground">
+                          {sc.is_exact_score
+                            ? "Cravou!"
+                            : sc.is_correct_winner
+                              ? "Acertou o vencedor"
+                              : "Errou"}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {row.home_score} – {row.away_score}
+                    </span>
+                    <span className="w-12 text-right text-sm font-bold tabular-nums">
+                      {sc ? `${sc.points} pts` : "—"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }
