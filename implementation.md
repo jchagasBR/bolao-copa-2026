@@ -8,8 +8,8 @@
 ## Session log
 
 **Last session:** resumed 2026-05-26.
-**Current phase:** Phase 1 — auth flow built locally (sign-up, login, email confirmation, dashboard shell). Pending: apply `0001_init.sql` migration to Supabase, customize the PT-BR email template, manual end-to-end test of the sign-up flow.
-**Schedule status:** ~3 days behind the original Phase 0 schedule, but Phase 1's main code is now in. Phase 6 freed 1 day and the buffer day (06-09) absorbs the rest. Still on track for 2026-06-11 launch.
+**Current phase:** Phase 1 ✅ verified end-to-end (sign-up → email confirmation → dashboard → sign-out → sign-in). Ready for Phase 2.
+**Schedule status:** Phases 0 and 1 done on the same day (2026-05-26). Phase 2 (4-day budget) starts next. Phase 6 freed 1 day and the buffer day (06-09) absorbs any further slip. Still on track for 2026-06-11 launch.
 
 ### What's done
 
@@ -106,13 +106,13 @@ pnpm dev
 
 ---
 
-## Phase 1 — Auth and navigation shell (Days 2-3: 2026-05-23 to 2026-05-24) — 🟡 code in, manual setup + test pending
+## Phase 1 — Auth and navigation shell (done 2026-05-26) — 🟢 verified
 
 **Goal:** users can sign up, confirm email, log in, and see the "Meus bolões" dashboard with a path to create or join a pool.
 
 - [x] ~~Configure Resend as Supabase Auth SMTP~~ — _done in Phase 0, 2026-05-26_
-- [ ] **Apply `supabase/migrations/0001_init.sql` via Supabase SQL Editor** (creates the `profile` table, RLS policy, and `auth.users → profile` trigger). See `supabase/README.md` for steps.
-- [ ] **Customize the Supabase confirmation email template** to use the PKCE/OTP flow that hits our `/auth/confirm` route. In Supabase dashboard → Authentication → Email Templates → "Confirm signup", replace the body with:
+- [x] **Apply `supabase/migrations/0001_init.sql` via Supabase SQL Editor** — _done 2026-05-26_
+- [x] **Customize the Supabase confirmation email template** to use the PKCE/OTP flow that hits our `/auth/confirm` route — _done 2026-05-26._ Template body:
 
   ```html
   <h2>Bolão Copa 2026</h2>
