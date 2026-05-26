@@ -332,6 +332,20 @@ create table score (
   primary key (user_id, pool_id, match_id)
 );
 
+-- bonus: non-match bonus points. Group standings (kind='group_1st_X' / 'group_2nd_X'),
+-- champion (kind='champion'), and (deferred) knockout-round advancement
+-- (kind='r16_<team_iso>' etc.). Kept separate from `score` because score is
+-- keyed on (user_id, pool_id, match_id) and bonuses aren't tied to a single
+-- match. The pool_ranking view UNIONs both.
+create table bonus (
+  user_id     uuid not null references profile(id) on delete cascade,
+  pool_id     uuid not null references pool(id) on delete cascade,
+  kind        text not null,
+  points      smallint not null,
+  computed_at timestamptz not null default now(),
+  primary key (user_id, pool_id, kind)
+);
+
 -- reminder_sent: dedupes the prediction-reminder email (Phase 7).
 create table reminder_sent (
   user_id   uuid not null references profile(id) on delete cascade,
@@ -351,7 +365,7 @@ We deliberately **do not** use Postgres triggers to recompute scores. A trigger 
 
 Idempotency: `recompute_match` performs `INSERT … ON CONFLICT DO UPDATE`. Calling it twice with the same input produces the same `score` rows.
 
-A separate function **`recompute_bonuses(pool_id uuid) returns void`** computes group / knockout / champion bonuses per `requirements.md` §4.2; called from the cron after group stage ends, after each knockout round closes, and after the final.
+A separate function **`recompute_bonuses(pool_id uuid) returns void`** computes group / knockout / champion bonuses per `requirements.md` §4.2. It is called from the same admin score-entry server action that calls `recompute_match`, immediately after the match write — so corrections propagate through both layers in one round-trip. To stay idempotent under score corrections (e.g. admin re-enters a wrong score and the group standings flip), the function first DELETEs every bonus row in the target pool whose `kind` it owns (`group_*` and `champion`) and then re-INSERTs the currently-correct ones. A helper `compute_group_standings()` returns one row per (group_code, team_id, place) once all six matches in a group are finished; tiebreakers are points → goal difference → goals scored → alphabetical (full FIFA tiebreak chain is out of MVP scope).
 
 ### 4.2 RLS policies — explicit predicates
 
@@ -493,20 +507,28 @@ create policy match_public_select on match for select using (true);
 
 **`reminder_sent`** — service-role only (no policies needed beyond enabling RLS with no permissive policy).
 
-**Aggregated view `pool_ranking`** is the read path for the ranking page:
+**Aggregated view `pool_ranking`** is the read path for the ranking page. It UNIONs match-level `score` with `bonus` so the leaderboard sums both:
 ```sql
 create or replace view pool_ranking as
+with all_points as (
+  select pool_id, user_id, points, is_exact_score, is_correct_winner
+  from score
+  union all
+  select pool_id, user_id, points, false as is_exact_score, false as is_correct_winner
+  from bonus
+)
 select
-  s.pool_id,
-  s.user_id,
+  ap.pool_id,
+  ap.user_id,
   p.name,
-  sum(s.points)::int                                                as points,
-  count(*) filter (where s.is_exact_score)                          as exact_count,
-  count(*) filter (where s.is_correct_winner and not s.is_exact_score) as correct_winner_count
-from score s join profile p on p.id = s.user_id
-group by s.pool_id, s.user_id, p.name;
+  sum(ap.points)::int                                                  as points,
+  count(*) filter (where ap.is_exact_score)                            as exact_count,
+  count(*) filter (where ap.is_correct_winner and not ap.is_exact_score) as correct_winner_count
+from all_points ap
+join profile p on p.id = ap.user_id
+group by ap.pool_id, ap.user_id, p.name;
 ```
-Order on the client by `points desc, exact_count desc, correct_winner_count desc, name asc` — exactly the tiebreak rule in `requirements.md` §4.5.
+Order on the client by `points desc, exact_count desc, correct_winner_count desc, name asc` — exactly the tiebreak rule in `requirements.md` §4.5. Bonus rows contribute `points` only; they synthesize `is_exact_score=false` and `is_correct_winner=false` so they don't pollute the tiebreak counts.
 
 ## 5. Match score entry (manual, by admin)
 
@@ -524,6 +546,7 @@ There is no external sports data API. Match scores arrive in the system through 
 **Cron strategy (declared in `vercel.json`):**
 - `/api/cron/send-reminders` — hourly. Finds users in any pool with no prediction for a match starting in the next 12-24h and sends a Resend email; the `reminder_sent (user_id, match_id)` table prevents duplicates across runs.
 - _(No `sync-scores` cron — match data is admin-driven.)_
+- _(No `recompute_bonuses` cron either — the function is called from the admin score-entry server action right after `recompute_match`, so bonuses refresh on every score write or correction.)_
 
 **Operational expectations:**
 - WC 2026 has ~104 matches over ~6 weeks. ~3-4 group-stage matches per day at peak.

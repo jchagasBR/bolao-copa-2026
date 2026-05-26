@@ -86,13 +86,14 @@ begin
 end;
 $$;
 
--- ─── recompute_bonuses — stub until Phase 4 wires the bonus rules ──────────
--- Will award the bonus points from requirements §4.2:
---   1st in group +5, 2nd in group +3, qualified R16 +3, QF +5, SF +8,
---   final +12, champion +20.
--- Phase 4 fills this in once group stage results and the knockout bracket are
--- finalized. For now it is a no-op so callers (the admin score-entry action,
--- cron jobs) compile.
+-- ─── recompute_bonuses — superseded by 0007 + 0008 ─────────────────────────
+-- This is the original Phase 2 stub. Phase 4's 0007_bonus.sql redefines this
+-- function with the real group + champion logic and the doc-audit follow-up
+-- in 0008_recompute_bonuses_idempotent.sql makes it delete-and-reinsert so
+-- score corrections don't leak stale bonuses. The body below is kept only as
+-- a historical placeholder for SQL Editor archaeology — the live definition
+-- comes from the later migrations because Postgres takes the last CREATE OR
+-- REPLACE.
 create or replace function public.recompute_bonuses(p_pool_id uuid)
 returns void
 language plpgsql
@@ -100,7 +101,6 @@ security definer
 set search_path = public
 as $$
 begin
-  -- intentionally empty until Phase 4
   perform p_pool_id;
 end;
 $$;

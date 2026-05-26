@@ -230,7 +230,7 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 
 ---
 
-## Phase 4 — Group-stage, bracket, and champion bets (code done 2026-05-26) — 🟡 awaiting DB apply
+## Phase 4 — Group-stage, bracket, and champion bets (done 2026-05-26) — 🟢 verified by doc-auditor
 
 **Goal:** all non-match bet types are functional before WC kickoff. Compressed to 1 day — groups/champion are simple forms; bracket is a skeleton (real bracket UI can ship between end of group stage and R32 if needed).
 
@@ -247,9 +247,17 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 
 **Pending (need user / DB):**
 
-- [ ] **Apply `supabase/migrations/0007_bonus.sql` in the Supabase SQL Editor.** Idempotent.
+- [x] **Apply `supabase/migrations/0007_bonus.sql` in the Supabase SQL Editor.** Done 2026-05-26 (after a one-character rename: `position` → `place`, since `position` is a PG reserved word in `RETURNS TABLE`).
 - [ ] Wire `recompute_bonuses` to be called by the admin score-entry action (Phase 6) after each match update — currently only `recompute_match` is called. Add the call when Phase 6 lands.
-- [ ] **Run `doc-auditor` subagent** at end of Phase 4 per the original plan. Address any P0/P1 items before Phase 5.
+- [x] **Run `doc-auditor` subagent** at end of Phase 4. Found one P0 (bonus rows leak on score corrections) and four P1/P2 doc-drift items. All addressed in the "Phase 4 doc-audit follow-up" commit.
+
+### Phase 4 doc-audit follow-up (2026-05-26)
+
+- [x] **P0:** `recompute_bonuses` now DELETEs every `group_*` and `champion` bonus row for the pool before re-INSERTing. Without this, an admin correcting a wrong score would leave the previous +5/+3/+20 awards in place, double-counting points. Lives in `supabase/migrations/0008_recompute_bonuses_idempotent.sql`.
+- [x] **P1:** `architecture.md` §4 schema block now documents the `bonus` table; §4.1 documents the delete-then-insert idempotency contract and `compute_group_standings()`; §4.2 view block shows the UNION shape; §5 cron strategy note clarifies that `recompute_bonuses` is called by the admin server action, not a cron.
+- [x] **P2:** `0003_scoring.sql` `recompute_bonuses` stub now has a comment pointing readers at 0007 + 0008; `/palpites/mata-mata` copy fixed ("32 times em 16 jogos").
+- [ ] **P1:** finals decided on penalties currently produce no champion bonus because the CASE in `recompute_bonuses` can't pick a winner when `home_score = away_score`. **Decide before 2026-07-19 (final).** Likely fix: add a `winner_team_id uuid` column to `match` populated by the admin for knockout matches that need it, and use it instead of the score comparison. Schedule for Phase 6 (admin score entry) so the change rides along with the new admin form.
+- [ ] **Apply `supabase/migrations/0008_recompute_bonuses_idempotent.sql` in the Supabase SQL Editor.** Idempotent.
 
 **Verify:**
 - A participant completes group bets + champion in under 5 minutes.

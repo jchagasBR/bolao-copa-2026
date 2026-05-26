@@ -39,9 +39,9 @@ export default async function PalpitesMataMataPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            A chave começa em <strong>32 jogos</strong> (R32). Os classificados
-            (2 por grupo + 8 melhores 3os) só são conhecidos após o fim da fase
-            de grupos, em 27 de junho.
+            A chave começa com <strong>32 times em 16 jogos</strong> (R32). Os
+            classificados (2 por grupo + 8 melhores 3os) só são conhecidos
+            após o fim da fase de grupos, em 27 de junho.
           </p>
           {firstR32 && (
             <p>
