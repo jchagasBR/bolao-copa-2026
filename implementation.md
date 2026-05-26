@@ -7,9 +7,9 @@
 
 ## Session log
 
-**Last session ended:** 2026-05-23 evening, by user request ("I will stop now").
-**Current phase:** Phase 0 — partially complete.
-**Schedule status:** ~1 day behind the original plan (Phase 0 was scheduled for Day 1, but we needed Day 1 to install tooling and the API-Football decision change). Phase 6 freed 1 day, so net we're on track.
+**Last session:** resumed 2026-05-26.
+**Current phase:** Phase 0 — Supabase project now live (region `eu-central-1`); Resend + Vercel external steps still pending.
+**Schedule status:** ~3 days behind the original Phase 0 schedule (Day 1 → now Day 5), but Phase 6 freed 1 day and the buffer day (06-09) absorbs the rest. Still on track for 2026-06-11 launch.
 
 ### What's done
 
@@ -26,9 +26,7 @@
 
 Three external accounts the user must create — Claude cannot do these. **All are blockers for Phase 1.**
 
-1. **Supabase project** → paste back `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-   - Region: `sa-east-1` (São Paulo)
-   - Project name: `bolao-copa-2026`
+1. ~~**Supabase project**~~ — **DONE 2026-05-26.** Project `bolao-copa-2026` created in region `eu-central-1` (Frankfurt; chosen to balance latency for users in Poland and São Paulo). Credentials wired into `.env.local`; both publishable and secret keys verified against `/auth/v1/health` and `/rest/v1/`.
 
 2. **Resend account** → paste back `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; then configure Supabase Auth → SMTP (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: the Resend API key); send a test confirmation email to a Gmail address and report whether it landed in inbox or spam.
 
@@ -92,7 +90,7 @@ pnpm dev
 
 **External / user work — pending (the resume point):**
 
-- [ ] **Create Supabase project** (region `sa-east-1`) and capture URL + anon key + service role key
+- [x] **Create Supabase project** (region `eu-central-1`, Frankfurt) and capture URL + publishable key + secret key — _done 2026-05-26_
 - [ ] **Create Resend account**, get API key + sender email
 - [ ] **Configure Supabase Auth → SMTP** with Resend (Host: `smtp.resend.com`, Port: `465`, User: `resend`, Password: Resend API key)
 - [ ] **Send a test confirmation email** through Supabase Auth to a real Gmail address; confirm it lands in inbox, not spam
