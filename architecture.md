@@ -116,12 +116,12 @@ bolao-copa-2026/
 │       └── ci.yml                 # lint + typecheck + build
 ├── .vscode/                       # optional, recommended extensions
 ├── app/                           # Next.js App Router
-│   ├── (public)/                  # landing, privacy, login pages
-│   │   ├── page.tsx               # /
-│   │   ├── entrar/page.tsx        # /entrar  (login)
-│   │   ├── cadastro/page.tsx      # /cadastro
-│   │   └── recuperar/page.tsx     # /recuperar (password reset)
-│   ├── (app)/                     # authenticated routes
+│   ├── entrar/page.tsx            # /entrar  (login)        — public
+│   ├── cadastro/page.tsx          # /cadastro               — public
+│   ├── cadastro/verifique-email/  # confirm-email landing   — public
+│   ├── auth/confirm/route.ts      # OTP/PKCE email callback — public
+│   ├── auth/signout/route.ts      # POST signout            — auth required
+│   ├── (app)/                     # authenticated routes (own / via middleware)
 │   │   ├── layout.tsx             # nav shell + <PoolSwitcher /> in header
 │   │   ├── page.tsx               # dashboard: list of "Meus bolões" + criar/entrar CTAs
 │   │   ├── boloes/                # pool management
@@ -162,11 +162,12 @@ bolao-copa-2026/
 │   └── time.ts                    # date-fns-tz helpers (formatInTimeZone, parseISO)
 ├── supabase/
 │   ├── migrations/                # versioned SQL
-│   │   ├── 0001_init.sql
-│   │   ├── 0002_seed_teams_matches.sql
-│   │   └── ...
-│   ├── seed.sql                   # local dev convenience
-│   └── config.toml                # supabase CLI config
+│   │   ├── 0001_init.sql               # schema (tables, enums, indexes, views, triggers)
+│   │   ├── 0002_rls.sql                # RLS policies for every table
+│   │   ├── 0003_scoring.sql            # compute_match_points, recompute_match, bet_match_locked
+│   │   ├── 0004_seed_teams_groups.sql  # 48 teams, groups A-L
+│   │   └── 0005_seed_matches.sql       # 104 fixtures with UTC kickoffs
+│   └── README.md                  # how to apply migrations via the SQL Editor
 ├── tests/
 │   └── scoring.spec.ts            # vitest, tests pure scoring functions
 ├── middleware.ts                  # protects /(app)/* and /admin/*
@@ -264,6 +265,9 @@ create table match (
 );
 
 -- bet_match: a per-match prediction. Range 0–20 to match requirements §3.3.
+-- The unique key is (user_id, pool_id, match_id): a user belongs to many
+-- pools and predicts the same match independently in each — predictions are
+-- pool-scoped (requirements §3.5).
 create table bet_match (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references profile(id) on delete cascade,
@@ -273,7 +277,7 @@ create table bet_match (
   away_score    smallint not null check (away_score between 0 and 20),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
-  unique (user_id, match_id)
+  unique (user_id, pool_id, match_id)
 );
 
 -- bet_group: predicted standings (1st/2nd) per group

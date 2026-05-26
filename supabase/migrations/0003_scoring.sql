@@ -107,30 +107,37 @@ $$;
 
 -- ─── bet_match locking trigger ─────────────────────────────────────────────
 -- Hard data-integrity rule: once a match has kicked off, predictions for it
--- are immutable (mirrors the RLS WITH CHECK, but catches service-role writes
--- and edge cases the RLS layer doesn't see).
+-- are immutable. Covers INSERT, UPDATE, *and* DELETE — the DELETE arm closes
+-- the gap surfaced by the Phase 2 doc-audit (RLS `for all` would otherwise
+-- permit a member to delete their own bet after kickoff, which §4.4 maps to
+-- a missing-prediction zero — a silent data-loss path).
 create or replace function public.enforce_bet_match_locked()
 returns trigger
 language plpgsql
 as $$
 declare
-  k timestamptz;
+  k    timestamptz;
+  m_id uuid;
 begin
-  select kickoff_at into k from public.match where id = new.match_id;
+  m_id := case when tg_op = 'DELETE' then old.match_id else new.match_id end;
+
+  select kickoff_at into k from public.match where id = m_id;
   if k is null then
     raise exception 'bet_match_invalid_match'
       using message = 'Jogo não encontrado.';
   end if;
+
   if now() >= k then
     raise exception 'bet_match_locked'
       using errcode = 'check_violation',
             message = 'O palpite não pode mais ser editado após o início do jogo.';
   end if;
-  return new;
+
+  return case when tg_op = 'DELETE' then old else new end;
 end;
 $$;
 
 drop trigger if exists bet_match_locked on public.bet_match;
 create trigger bet_match_locked
-  before insert or update on public.bet_match
+  before insert or update or delete on public.bet_match
   for each row execute function public.enforce_bet_match_locked();

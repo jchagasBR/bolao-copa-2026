@@ -22,15 +22,12 @@
 - Three founding docs and `doc-auditor` subagent in place.
 - **Strategy change:** dropped API-Football (free tier excludes WC 2026); match scores will be entered manually by pool admins. Phase 6 shrank from 2 days to 1.
 
-### What's pending (resume here)
+### Outstanding external/manual work
 
-Three external accounts the user must create — Claude cannot do these. **All are blockers for Phase 1.**
+Only one external item is still pending. Everything else through Phase 2 is done.
 
-1. ~~**Supabase project**~~ — **DONE 2026-05-26.** Project `bolao-copa-2026` created in region `eu-central-1` (Frankfurt; chosen to balance latency for users in Poland and São Paulo). Credentials wired into `.env.local`; both publishable and secret keys verified against `/auth/v1/health` and `/rest/v1/`.
-
-2. ~~**Resend account**~~ — **DONE 2026-05-26.** API key + sandbox sender `onboarding@resend.dev` wired into Supabase Auth SMTP (Host: `smtp.resend.com`, Port: `465`, User: `resend`). Test invitation arrived in Gmail **Inbox**. ⚠️ Sandbox sender only delivers to the Resend account owner's email — a custom domain must be verified on Resend before Phase 9 (launch) so invitations can reach all friends. See [[project-resend-sandbox-limit]].
-
-3. **Vercel project** _(deferred — Phase 1 can proceed locally without it)_ → import the GitHub repo, paste env vars, trigger a first deploy. Paste back the production URL → that becomes `APP_URL`.
+- **Vercel project + production URL** _(deferred; Phase 3 can still proceed locally)._ Import the GitHub repo, paste env vars, trigger a first deploy → that URL becomes `APP_URL`.
+- **Custom Resend domain** _(blocker before Phase 9 launch only)._ The sandbox sender only delivers to the Resend account owner's email; a verified domain unblocks invitations to all friends. See [[project-resend-sandbox-limit]].
 
 ### First action when resuming
 
@@ -157,13 +154,20 @@ pnpm dev
 - [x] Implement `lib/scoring/ranking.ts` with the tie-break logic per `requirements.md` §4.5
 - [x] Write vitest tests — **16 tests** in `tests/scoring.spec.ts` covering all 4 match-scoring branches + ranking tie-breaks; `vitest.config.ts` added so `@/` alias resolves in tests.
 
-**Pending (need user / DB):**
+**Closed 2026-05-26:**
 
-- [ ] **Apply migrations 0001–0005 in order via Supabase SQL Editor.** 0001 is a re-run of the Phase 1 file (idempotent), then 0002–0005 are new. See `supabase/README.md` for ordering.
-- [ ] **Manual DB test:** insert a fake match score via SQL, call `recompute_match(...)`, verify `score` rows are produced. Call it again, verify result is identical (idempotency).
-- [ ] **Manual DB test:** seed two test users in two pools, insert 10 pool_member rows for one user, verify the 11th INSERT is rejected with the PT-BR error.
-- [ ] **Manual DB test:** logged-in-as-A, try to SELECT user-B's `bet_match` for a future match — should return zero rows. Same query for a past match — should succeed.
-- [ ] **Run `doc-auditor` subagent** to surface drift between code and the three founding docs.
+- [x] Migrations 0001–0005 applied to Supabase. Verified `select group_code, count(*) from team` returns 4 per group (×12) and `select stage, count(*) from match` returns the expected 72/16/8/4/2/1/1.
+- [x] `doc-auditor` subagent run. Findings triaged in the commit log; P0/P1 fixes applied in the same session (see "Phase 2 doc-audit follow-up" commit). Deferred DB-level verification (cap trigger, RLS predicates) — can be exercised in Phase 3 when real pool data exists.
+
+### Phase 2 doc-audit follow-up (2026-05-26)
+
+Tightening pass after the `doc-auditor` report. **All idempotent — user must re-apply `0002_rls.sql` and `0003_scoring.sql` in the Supabase SQL Editor for the changes to take effect.**
+
+- [ ] **Re-apply `0002_rls.sql`** — adds a `pool_id` membership guard to every `bet_*` WITH CHECK predicate (defense in depth — the server action's `assertMember` is no longer the only barrier).
+- [ ] **Re-apply `0003_scoring.sql`** — extends the `bet_match_locked` trigger to also fire on `DELETE`, closing the path where a member could delete their own bet after kickoff and silently downgrade to a missing-prediction zero (§4.4).
+- [x] `architecture.md` §4 corrected: `bet_match` unique key is `(user_id, pool_id, match_id)` per the multi-pool requirement.
+- [x] `architecture.md` §3 file layout updated to match the actual auth route names and the 5 migration filenames; `/recuperar` removed (out of scope per `requirements.md` §6).
+- [x] `lib/pool.ts` stub comments updated — tables exist; queries land in Phase 3.
 
 ### Note on the §4.1 example
 

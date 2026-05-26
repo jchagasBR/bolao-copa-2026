@@ -62,13 +62,19 @@ create policy pm_self_delete on public.pool_member for delete
   using (user_id = auth.uid());
 
 -- ─── bet_match ──────────────────────────────────────────────────────────────
--- Own bets always readable/writable up to kickoff. Other members' bets visible
--- only after kickoff (so participants can compare predictions post-match).
+-- Own bets are readable any time and writable up to kickoff. Other members'
+-- bets are visible only after kickoff so participants can compare predictions
+-- post-match. WITH CHECK adds a pool_id membership guard (defense in depth —
+-- server actions also call assertMember(), but RLS should not assume that).
 drop policy if exists bm_self_all on public.bet_match;
 create policy bm_self_all on public.bet_match for all
   using (user_id = auth.uid())
   with check (
     user_id = auth.uid()
+    and exists (
+      select 1 from public.pool_member pm
+      where pm.pool_id = bet_match.pool_id and pm.user_id = auth.uid()
+    )
     and exists (
       select 1 from public.match m
       where m.id = bet_match.match_id and now() < m.kickoff_at
@@ -94,7 +100,14 @@ create policy bm_peer_after_kickoff on public.bet_match for select
 drop policy if exists bg_self_all on public.bet_group;
 create policy bg_self_all on public.bet_group for all
   using (user_id = auth.uid())
-  with check (user_id = auth.uid() and (select t from public.first_kickoff) > now());
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.pool_member pm
+      where pm.pool_id = bet_group.pool_id and pm.user_id = auth.uid()
+    )
+    and (select t from public.first_kickoff) > now()
+  );
 
 drop policy if exists bg_peer_after_deadline on public.bet_group;
 create policy bg_peer_after_deadline on public.bet_group for select
@@ -112,7 +125,14 @@ create policy bg_peer_after_deadline on public.bet_group for select
 drop policy if exists bk_self_all on public.bet_knockout;
 create policy bk_self_all on public.bet_knockout for all
   using (user_id = auth.uid())
-  with check (user_id = auth.uid() and (select t from public.first_r32_kickoff) > now());
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.pool_member pm
+      where pm.pool_id = bet_knockout.pool_id and pm.user_id = auth.uid()
+    )
+    and (select t from public.first_r32_kickoff) > now()
+  );
 
 drop policy if exists bk_peer_after_deadline on public.bet_knockout;
 create policy bk_peer_after_deadline on public.bet_knockout for select
@@ -130,7 +150,14 @@ create policy bk_peer_after_deadline on public.bet_knockout for select
 drop policy if exists bc_self_all on public.bet_champion;
 create policy bc_self_all on public.bet_champion for all
   using (user_id = auth.uid())
-  with check (user_id = auth.uid() and (select t from public.first_kickoff) > now());
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.pool_member pm
+      where pm.pool_id = bet_champion.pool_id and pm.user_id = auth.uid()
+    )
+    and (select t from public.first_kickoff) > now()
+  );
 
 drop policy if exists bc_peer_after_deadline on public.bet_champion;
 create policy bc_peer_after_deadline on public.bet_champion for select

@@ -15,8 +15,9 @@ export async function listMyPools(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // pool_member + pool tables don't exist yet (Phase 2 schema work).
-  // Once they do, this query reads the caller's memberships scoped by RLS.
+  // The pool_member + pool tables exist (Phase 2 migrations). No pool data
+  // is created yet — Phase 3 wires /boloes/criar and /boloes/entrar. This
+  // helper returns [] until then, which renders the dashboard empty state.
   return [];
 }
 
@@ -25,7 +26,8 @@ export async function assertMember(
   userId: string,
 ): Promise<void> {
   const supabase = await createClient();
-  // Will read pool_member once Phase 2 lands the schema.
+  // The pool_member table exists; Phase 3 wires the SELECT here and the
+  // call sites in pool-scoped server actions.
   void supabase;
   void poolId;
   void userId;
