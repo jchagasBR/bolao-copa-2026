@@ -159,6 +159,14 @@ pnpm dev
 - [x] Migrations 0001–0005 applied to Supabase. Verified `select group_code, count(*) from team` returns 4 per group (×12) and `select stage, count(*) from match` returns the expected 72/16/8/4/2/1/1.
 - [x] `doc-auditor` subagent run. Findings triaged in the commit log; P0/P1 fixes applied in the same session (see "Phase 2 doc-audit follow-up" commit). Deferred DB-level verification (cap trigger, RLS predicates) — can be exercised in Phase 3 when real pool data exists.
 
+### Phase 3 RLS-recursion fix (2026-05-26)
+
+End-to-end testing surfaced a Postgres `42P17` "infinite recursion detected in policy for relation pool_member" error on **every** pool creation attempt. Root cause: `pm_self_select` (from `0002_rls.sql`) contained an `exists (select 1 from pool_member …)` subquery, and `INSERT … RETURNING` on pool reads the new row through pool's SELECT policy → which reads pool_member → which re-enters `pm_self_select`. Recursion.
+
+- [x] Add `supabase/migrations/0006_fix_rls_recursion.sql` introducing a `SECURITY DEFINER` `is_pool_member(pool_id, user_id)` helper (owned by `postgres`, `BYPASSRLS`) and rewriting both `pm_self_select` and `pool.pool_member_select` to use it. Broadened pool's SELECT to also let the admin see their own pool (so `RETURNING` works on the initial insert).
+- [x] Updated `architecture.md` §4.2 to document the helper and the new policy shape.
+- [ ] **Apply `supabase/migrations/0006_fix_rls_recursion.sql` in the Supabase SQL Editor.** Idempotent — uses `DROP POLICY IF EXISTS` and `CREATE OR REPLACE FUNCTION`.
+
 ### Phase 1 password-reset addendum (2026-05-26)
 
 The original plan deferred password reset (`requirements.md` §6) on the assumption that the admin would reset via the Supabase dashboard. End-to-end testing surfaced that even the admin can't reliably do this without a `/recuperar/redefinir` page in the app, since Supabase's recovery email links land somewhere our app needs to handle. Brought back into MVP scope.

@@ -371,10 +371,38 @@ create policy profile_self_update on profile for update
   using (id = auth.uid()) with check (id = auth.uid());
 ```
 
+**Helper function — `is_pool_member`**
+
+A `SECURITY DEFINER` function (owned by `postgres`, which has `BYPASSRLS`) is used in every policy that needs to ask "is user X a member of pool Y?". Calling the function from inside an RLS predicate avoids the infinite-recursion that bites the obvious `exists (select 1 from pool_member …)` predicate — when the policy is on `pool_member` itself, that subquery re-enters the same policy. Lives in `0006_fix_rls_recursion.sql`.
+
+```sql
+create or replace function public.is_pool_member(p_pool_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1 from public.pool_member
+    where pool_id = p_pool_id and user_id = p_user_id
+  );
+$$;
+grant execute on function public.is_pool_member(uuid, uuid) to authenticated, anon;
+```
+
 **`pool`**
 ```sql
+-- Admin sees their pool from the moment of insert (lets INSERT … RETURNING
+-- succeed before the pool_member row is created); members see pools they
+-- belong to.
 create policy pool_member_select on pool for select
-  using (exists (select 1 from pool_member where pool_id = pool.id and user_id = auth.uid()));
+  using (
+    admin_id = auth.uid()
+    or public.is_pool_member(pool.id, auth.uid())
+  );
+create policy pool_insert_self_admin on pool for insert
+  with check (admin_id = auth.uid());
 create policy pool_admin_update on pool for update
   using (admin_id = auth.uid()) with check (admin_id = auth.uid());
 ```
@@ -382,11 +410,14 @@ create policy pool_admin_update on pool for update
 **`pool_member`**
 ```sql
 create policy pm_self_select on pool_member for select
-  using (user_id = auth.uid()
-      or exists (select 1 from pool_member pm
-                 where pm.pool_id = pool_member.pool_id and pm.user_id = auth.uid()));
+  using (
+    user_id = auth.uid()
+    or public.is_pool_member(pool_member.pool_id, auth.uid())
+  );
 create policy pm_self_insert on pool_member for insert
   with check (user_id = auth.uid());
+create policy pm_self_delete on pool_member for delete
+  using (user_id = auth.uid());
 ```
 
 **`bet_match`** — own bets always readable/writable until kickoff; other members' bets visible **only after kickoff**.

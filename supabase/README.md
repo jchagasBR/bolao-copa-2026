@@ -20,3 +20,4 @@ Apply in this order. Each file is idempotent; re-running a file is safe.
 3. `0003_scoring.sql` — scoring functions `compute_match_points`, `recompute_match`, `recompute_bonuses` (stub until Phase 4), and the `bet_match_locked` trigger.
 4. `0004_seed_teams_groups.sql` — the 48 WC 2026 teams with their group letter (A-L). Source: Wikipedia "2026 FIFA World Cup Group A".."Group L".
 5. `0005_seed_matches.sql` — the 104 fixtures with `kickoff_at` in UTC. Group-stage matches have home/away assigned; knockout fixtures (73-104) have NULL teams until the admin populates them.
+6. `0006_fix_rls_recursion.sql` — fixes the infinite-recursion error in `pm_self_select` that blocked any pool creation. Introduces the `is_pool_member(pool_id, user_id)` SECURITY DEFINER helper and broadens pool's SELECT policy so the admin can `INSERT … RETURNING` a brand-new pool.
