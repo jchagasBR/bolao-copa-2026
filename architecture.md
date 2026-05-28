@@ -121,6 +121,7 @@ bolao-copa-2026/
 │   ├── cadastro/verifique-email/  # confirm-email landing         — public
 │   ├── recuperar/page.tsx         # /recuperar (request reset)    — public
 │   ├── recuperar/redefinir/       # /recuperar/redefinir (new pw) — public, valid only with a recovery session
+│   ├── regras/page.tsx            # /regras (PT-BR rules summary) — public
 │   ├── auth/confirm/route.ts      # OTP/PKCE email callback       — public (signup + recovery)
 │   ├── auth/signout/route.ts      # POST signout                  — auth required
 │   ├── (app)/                     # authenticated routes (own / via middleware)
@@ -160,7 +161,8 @@ bolao-copa-2026/
 │   ├── local-time.tsx             # Client Component formatting UTC → browser TZ
 │   ├── nav-items.ts               # shared NAV_ITEMS array (5 top-level routes + icons)
 │   ├── mobile-nav.tsx             # md:hidden bottom bar
-│   └── desktop-nav.tsx            # hidden md:block header nav
+│   ├── desktop-nav.tsx            # hidden md:block header nav
+│   └── footer.tsx                 # global footer rendered by root layout — links to /regras
 ├── lib/
 │   ├── supabase/
 │   │   ├── server.ts              # createServerClient — SSR/Server Action client, RLS-respecting

@@ -7,9 +7,9 @@
 
 ## Session log
 
-**Last session ended:** 2026-05-28 — Phases 6 and 7 both landed in the same session. Phase 6 (admin score entry) was end-to-end verified; Phase 7 (email reminders) is code-complete but awaiting DB apply + a local E2E smoke test against the account owner's inbox (sandbox sender; multi-user testing still deferred to Phase 9).
-**Current phase:** Phase 7 🟡 code-complete. Next: apply `0011_users_missing_prediction.sql`, set `CRON_SECRET`, smoke-test the cron route, then move to Phase 8 (polish/UAT).
-**Schedule status:** Phases 6 and 7 were budgeted for 2026-06-04 through 2026-06-07 and landed 9 days early. Phases 0 through 7 done in code; **about 9 days ahead of plan.** 14 days until WC kickoff (2026-06-11).
+**Last session ended:** 2026-05-28 — Phases 6, 7, and the code parts of Phase 8 all landed in the same session. Phase 7 cron route was verified locally (auth gate + empty window); inbox delivery deferred to production. Phase 8 code parts: `/regras` rules page, global footer, a11y polish (skip-link + `aria-current`).
+**Current phase:** Phase 8 🟡 code-complete. The remaining Phase 8 items are user-driven UAT (recruit testers, real-friends pool, mobile device smoke test) and mostly gated on the Resend domain verification + Vercel deploy. Next code phase is Phase 9 (launch wiring) when the user is ready.
+**Schedule status:** Phases 6, 7, and 8 (code) were budgeted for 2026-06-04 through 2026-06-08 and landed 11 days early. Phases 0 through 8 (code) done; **about 11 days ahead of plan.** 14 days until WC kickoff (2026-06-11).
 
 ### Done (in order, with the commit that closed each piece)
 
@@ -23,7 +23,8 @@
 | **4** — Group + champion + bracket placeholder | 🟢 | `/palpites/grupos`, `/palpites/campeao`, `/palpites/mata-mata` placeholder, `/palpites` hub. 0007 bonus table + `compute_group_standings()` + group/champion `recompute_bonuses`. 0008 makes it idempotent under score corrections. doc-auditor pass. |
 | **5** — Ranking + perfil + peer predictions | 🟢 | `/ranking` (live via Realtime), `/perfil` (per-pool stats), `/jogos/[matchId]` post-kickoff peer predictions card. 0009 opted `score` + `bonus` into the realtime publication. User verified live ranking refresh. |
 | **6** — Admin score entry | 🟢 | `/admin/jogos/[matchId]` with score-entry + reagendar forms; new `lib/supabase/service.ts` for the only write path that bypasses RLS. 0010 adds `match.winner_team_id` + the `match_winner_is_a_team` CHECK, and rewrites `recompute_bonuses` so finals decided on penalties still award the champion bonus (closes the Phase 4 P1). Server action recomputes `recompute_match` then loops `recompute_bonuses` across every pool. "Editar resultado / horário →" link wired into `/jogos/[matchId]` for admins. Desktop nav added (`components/desktop-nav.tsx` + shared `components/nav-items.ts`) — Phase 1 only shipped the mobile bottom nav. User manually verified happy-path score entry. Doc-auditor + P0/P1 follow-up applied. |
-| **7** — Email reminders | 🟡 | `emails/bet-reminder.tsx` (React Email, PT-BR), `app/api/cron/send-reminders/route.ts` (hourly, Bearer-gated, dedup via `reminder_sent`), `vercel.json` cron declaration, `/perfil` opt-out toggle. 0011 adds the `users_missing_prediction()` RPC (service-role only). Awaiting DB apply + local smoke test; multi-user E2E deferred to Phase 9 (Resend domain). |
+| **7** — Email reminders | 🟢 | `emails/bet-reminder.tsx` (React Email, PT-BR), `app/api/cron/send-reminders/route.ts` (hourly, Bearer-gated, dedup via `reminder_sent`), `vercel.json` cron declaration, `/perfil` opt-out toggle. 0011 adds the `users_missing_prediction()` RPC (service-role only). Auth gate + empty-window happy path verified locally (401/401/200 with empty results); inbox-delivery verification deferred to production. Multi-user E2E still deferred to Phase 9 (Resend domain). Middleware fix shipped to let `/api/*` bypass the session redirect. |
+| **8** — Polish (code parts) | 🟡 | `/regras` public PT-BR rules page, global `Footer` in root layout, "Regras" link in `/perfil` Atalhos for mobile. A11y polish: skip-link in root layout, `aria-current="page"` on nav. UAT (recruit testers + Lighthouse run + mobile smoke test) deferred — most is gated on Resend domain + Vercel deploy. |
 
 10 of 11 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`); 0011 is pending. The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
 
@@ -385,17 +386,17 @@ Tightening pass after the `doc-auditor` report. **All docs-only — no code or m
 
 ---
 
-## Phase 8 — Polish and UAT (Day 18: 2026-06-08)
+## Phase 8 — Polish and UAT (code parts done 2026-05-28, 11 days early) — 🟡 awaiting UAT
 
 **Goal:** the app is ready for real friends.
 
-- [ ] Recruit 3-5 beta testers among the closest friends
-- [ ] Create a real pool, share the invite code, observe sign-up and prediction submission
-- [ ] Triage and fix bugs in priority order (auth and prediction first, everything else second)
-- [ ] Write a short "Regras do bolão" page accessible from the footer summarizing scoring and deadlines
-- [ ] Verify Lighthouse mobile Performance ≥ 85 on `/`, `/jogos`, `/ranking`
-- [ ] Accessibility pass: keyboard nav + contrast on sign-up, login, and prediction pages
-- [ ] Smoke test on iPhone Safari and Android Chrome at 360px width
+- [x] Write a short "Regras do bolão" page accessible from the footer summarizing scoring and deadlines — `/regras` (public route, in the middleware allow-list), covers per-match scoring, bonuses, deadlines, missing-prediction policy, tiebreakers, invite-code rules, and admin score entry. Linked from a new global footer (`components/footer.tsx`, in root layout) and from `/perfil` Atalhos (the footer is hidden behind the fixed mobile bottom-nav on small screens, so mobile users find it in Perfil).
+- [x] Accessibility pass — partial. Added a skip-link ("Pular para o conteúdo") in the root layout (visible only on focus, target `#conteudo`), and `aria-current="page"` on the active nav item in both `MobileNav` and `DesktopNav`. The auth + prediction forms were already in good shape (labeled inputs, `autoComplete`, `required`, `role="alert"` on errors, descriptive button text with pending state). Real contrast/keyboard testing happens during UAT.
+- [ ] **Recruit 3-5 beta testers among the closest friends.** — user task.
+- [ ] **Create a real pool, share the invite code, observe sign-up and prediction submission.** — user task; effectively blocked on a verified Resend domain (sandbox sender only emails the account owner). Possible workaround: invite a couple of friends in person and use a Gmail trick or share-screen so they can confirm with a real address.
+- [ ] **Triage and fix bugs in priority order (auth and prediction first, everything else second).** — emerges from UAT.
+- [ ] **Verify Lighthouse mobile Performance ≥ 85 on `/`, `/jogos`, `/ranking`.** — requires a production-mode build; easiest after the Vercel deploy in Phase 9. Locally: `pnpm build && pnpm start`, then Lighthouse against `http://localhost:3000` with the mobile profile.
+- [ ] **Smoke test on iPhone Safari and Android Chrome at 360px width.** — user task with real devices.
 
 **Verify:**
 - All 5 beta testers complete the full flow (sign up → confirm email → join pool → predict 3 matches → see ranking) without 1:1 help.
