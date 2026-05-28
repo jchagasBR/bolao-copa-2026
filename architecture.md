@@ -43,10 +43,10 @@
 ### 2.1 Frontend
 | Concern | Choice | Reason |
 |---|---|---|
-| Framework | **Next.js 14 (App Router)** | RSC + Server Actions remove the need for a separate API server. Best deploy story on Vercel. |
+| Framework | **Next.js 16 (App Router)** + **React 19** | RSC + Server Actions remove the need for a separate API server. Best deploy story on Vercel. Originally planned Next 14 in Phase 0; bootstrapped at 16 since 16 was current at scaffold time (2026-05-22). |
 | Language | **TypeScript (strict mode)** | Catches schema mismatches with the DB at compile time. |
-| Styling | **Tailwind CSS** | Fast iteration, mobile-first utilities built-in. |
-| UI components | **shadcn/ui** | Accessible (Radix-based), unstyled-by-default, owned-in-repo (no version lock). |
+| Styling | **Tailwind CSS 4** | Fast iteration, mobile-first utilities built-in. |
+| UI components | **shadcn/ui (base-nova preset, neutral colors)** + Base UI primitives where shadcn doesn't ship one (e.g. dropdown) | Accessible, unstyled-by-default, owned-in-repo (no version lock). |
 | Forms | **React Hook Form + Zod** | Type-safe forms with one schema reused for client + server validation. |
 | Charts | _none in MVP_ | Cut from scope to save time; ranking list is enough. |
 | State | RSC + URL state + a single cookie (`active_pool_id`), **no client store** | Most data is server-owned; the active pool is the one piece of UI state needed across pages. |
@@ -59,7 +59,7 @@
 | ORM / DB client | `@supabase/supabase-js` v2 |
 | Validation | Zod (shared with frontend) |
 | Cron | Vercel Cron (declared in `vercel.json`) hitting `/api/cron/*` endpoints |
-| Background jobs | None — Postgres triggers handle score recomputation synchronously |
+| Background jobs | None. Score recomputation runs inline in the admin server action (explicit `recompute_match` + `recompute_bonuses` calls — see §4.1). The one Postgres trigger is `bet_match_locked`, which enforces the kickoff cutoff on `bet_match` writes/deletes — a data-integrity invariant, not a scoring concern. |
 
 ### 2.3 Database
 - **Supabase Postgres** (free tier: 500MB storage, 50k MAU — more than enough for ≤30 users).
@@ -72,13 +72,13 @@
 - SMTP: Resend (configured in Supabase Auth settings) to escape the very low default Supabase SMTP rate limit.
 - Sessions handled via Supabase's `@supabase/ssr` helpers (cookie-based, works in App Router).
 - **Pool admin** = the user who created the pool (`pool.admin_id = auth.uid()`). Per-pool authority for pool metadata edits (name, invite code).
-- **Match score override authority**: any user who is admin of **at least one pool** may override any match score, because match data is global (the score of a fixture is one fact shared by all pools). RLS predicate: `exists (select 1 from pool where admin_id = auth.uid())`. The trust model is that all pool admins are trusted friends.
+- **Match score override authority**: any user who is admin of **at least one pool** may override any match score, because match data is global (the score of a fixture is one fact shared by all pools). The check `exists (select 1 from pool where admin_id = auth.uid())` is enforced twice — once in `app/admin/layout.tsx` (gates the route segment with `notFound()`) and once in the score server action via `assertAnyPoolAdmin()`. The actual write goes through the service-role client (`lib/supabase/service.ts`); the `match` table has only a SELECT policy for end users — no INSERT/UPDATE policy. The trust model is that all pool admins are trusted friends.
 - **Active pool selection** is browser state, not auth: a cookie named `active_pool_id` (set by the pool switcher) tells server-rendered pages which pool to scope to. The middleware (see §6) sets a sensible default on first request.
 - No `app_metadata` role claim. Password reset is out of scope (see `requirements.md` §6).
 
 ### 2.5 Realtime
-- **Supabase Realtime** subscription on the `score` table only (a `match` score update propagates into `score` rows, so subscribing to `score` is sufficient and cheaper).
-- The ranking page subscribes once per pool and re-fetches the aggregated ranking on change events.
+- **Supabase Realtime** subscriptions on the `score` and `bonus` tables (both opted into the `supabase_realtime` publication by `0009_realtime.sql`). A `match` write triggers `recompute_match` → rows on `score`; the same admin action then loops `recompute_bonuses` → rows on `bonus`. Subscribing to both surfaces the full ranking change to clients.
+- The ranking page mounts a small `<RankingLive />` Client Component that subscribes once per active pool and calls `router.refresh()` on every `postgres_changes` event filtered by `pool_id`. Re-fetch happens via the server re-render, not a client-side aggregation — keeps the tiebreak logic in one place (the server).
 
 ### 2.6 External sports data
 - **None.** Match scores and statuses are entered by a pool admin via the admin panel (see §5).
@@ -92,7 +92,7 @@
 
 ### 2.8 Hosting and CI
 - **Vercel** (free tier; upgrade to Pro $20/mo only if bandwidth or function invocations exceed the limit during match days).
-- **GitHub Actions** for CI on every PR: lint + typecheck + build.
+- **GitHub Actions** for CI on every PR: lint + typecheck + test (vitest) + build.
 - Vercel **preview deploys** per PR; **production deploy** on `main`.
 
 ### 2.9 Time zones and internationalization
@@ -138,37 +138,49 @@ bolao-copa-2026/
 │   │   │   └── campeao/page.tsx
 │   │   ├── ranking/page.tsx       # ranking of the active pool
 │   │   └── perfil/page.tsx        # user's bets across pools, with a pool filter
-│   ├── admin/                     # admin panel (per-pool admin only)
-│   │   ├── layout.tsx
-│   │   └── jogos/[matchId]/page.tsx   # single editor reached by direct URL
+│   ├── admin/                          # admin area (any pool admin)
+│   │   ├── layout.tsx                  # gates /admin/* via any-pool-admin check; notFound() otherwise
+│   │   └── jogos/[matchId]/            # single per-match editor
+│   │       ├── page.tsx                # score + reagendar UI
+│   │       ├── actions.ts              # saveScore / saveKickoff server actions
+│   │       ├── score-form.tsx          # Client Component
+│   │       └── kickoff-form.tsx        # Client Component
 │   ├── api/
 │   │   └── cron/
 │   │       └── send-reminders/route.ts
 │   ├── layout.tsx                 # root layout
 │   └── globals.css
 ├── components/
-│   ├── ui/                        # shadcn primitives
+│   ├── ui/                        # shadcn primitives (button, card, input, label, dropdown-menu)
 │   ├── pool-switcher.tsx          # header dropdown (Client) — writes active_pool_id cookie
+│   ├── user-menu.tsx              # header user dropdown (Client) — name + signout
 │   ├── local-time.tsx             # Client Component formatting UTC → browser TZ
-│   └── ...                        # other app-specific components
+│   ├── nav-items.ts               # shared NAV_ITEMS array (5 top-level routes + icons)
+│   ├── mobile-nav.tsx             # md:hidden bottom bar
+│   └── desktop-nav.tsx            # hidden md:block header nav
 ├── lib/
 │   ├── supabase/
-│   │   ├── server.ts              # createServerClient
+│   │   ├── server.ts              # createServerClient — SSR/Server Action client, RLS-respecting
 │   │   ├── client.ts              # createBrowserClient
+│   │   ├── service.ts             # createServiceClient — bypasses RLS; only used by admin score action
 │   │   └── middleware.ts          # session refresh + active_pool_id default
 │   ├── pool.ts                    # readActivePoolId(), assertMember(), listMyPools()
 │   ├── scoring/
-│   │   ├── match.ts               # pure functions for §4.1
-│   │   ├── bonus.ts               # pure functions for §4.2
-│   │   └── ranking.ts             # tiebreak per §4.5
-│   └── time.ts                    # date-fns-tz helpers (formatInTimeZone, parseISO)
+│   │   ├── match.ts               # pure functions mirroring §4.1 (covered by vitest)
+│   │   └── ranking.ts             # tiebreak per §4.5 (covered by vitest)
+│   └── utils.ts                   # cn() class-merge helper for shadcn components
 ├── supabase/
 │   ├── migrations/                # versioned SQL
-│   │   ├── 0001_init.sql               # schema (tables, enums, indexes, views, triggers)
-│   │   ├── 0002_rls.sql                # RLS policies for every table
-│   │   ├── 0003_scoring.sql            # compute_match_points, recompute_match, bet_match_locked
-│   │   ├── 0004_seed_teams_groups.sql  # 48 teams, groups A-L
-│   │   └── 0005_seed_matches.sql       # 104 fixtures with UTC kickoffs
+│   │   ├── 0001_init.sql                       # schema (tables, enums, indexes, views, triggers)
+│   │   ├── 0002_rls.sql                        # RLS policies for every table
+│   │   ├── 0003_scoring.sql                    # compute_match_points, recompute_match, bet_match_locked
+│   │   ├── 0004_seed_teams_groups.sql          # 48 teams, groups A-L
+│   │   ├── 0005_seed_matches.sql               # 104 fixtures with UTC kickoffs
+│   │   ├── 0006_fix_rls_recursion.sql          # is_pool_member() SECURITY DEFINER helper
+│   │   ├── 0007_bonus.sql                      # bonus table, compute_group_standings, recompute_bonuses v1
+│   │   ├── 0008_recompute_bonuses_idempotent.sql # delete-then-insert idempotency on score corrections
+│   │   ├── 0009_realtime.sql                   # opts score + bonus into supabase_realtime publication
+│   │   └── 0010_winner_team_id.sql             # match.winner_team_id + champion bonus on penalty finals
 │   └── README.md                  # how to apply migrations via the SQL Editor
 ├── tests/
 │   └── scoring.spec.ts            # vitest, tests pure scoring functions
@@ -253,17 +265,29 @@ create type match_stage as enum ('group', 'r32', 'r16', 'qf', 'sf', 'third', 'fi
 create type match_status as enum ('scheduled', 'live', 'finished', 'postponed');
 
 create table match (
-  id            uuid primary key default gen_random_uuid(),
-  external_id   integer unique,              -- optional id from the schedule source (nullable)
-  stage         match_stage not null,
-  group_code    char(1),                     -- only for stage='group'
-  home_team_id  uuid references team(id),
-  away_team_id  uuid references team(id),
-  kickoff_at    timestamptz not null,
-  home_score    smallint,
-  away_score    smallint,
-  status        match_status not null default 'scheduled',
-  updated_at    timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  external_id     integer unique,              -- optional id from the schedule source (nullable)
+  stage           match_stage not null,
+  group_code      char(1),                     -- only for stage='group'
+  home_team_id    uuid references team(id),
+  away_team_id    uuid references team(id),
+  kickoff_at      timestamptz not null,
+  home_score      smallint,
+  away_score      smallint,
+  -- winner_team_id: nullable. NULL for group matches (a draw IS the result) and
+  -- for knockout matches decided in regulation (the score comparison wins). The
+  -- admin form requires it on knockout matches that finish level — captures who
+  -- advanced on penalties or coin toss. Added in 0010 so `recompute_bonuses`
+  -- can award the +20 champion bonus for a final decided on pens.
+  winner_team_id  uuid references team(id),
+  status          match_status not null default 'scheduled',
+  updated_at      timestamptz not null default now(),
+  -- A non-null winner must be one of the two teams listed on this match.
+  constraint match_winner_is_a_team check (
+    winner_team_id is null
+    or winner_team_id = home_team_id
+    or winner_team_id = away_team_id
+  )
 );
 
 -- bet_match: a per-match prediction. Range 0–20 to match requirements §3.3.
@@ -361,11 +385,15 @@ We deliberately **do not** use Postgres triggers to recompute scores. A trigger 
 
 - A SQL function **`recompute_match(match_id uuid) returns void`** reads the match score and upserts the corresponding `score` row for every `bet_match` against that match. It also sets `is_exact_score` and `is_correct_winner` for tiebreaker support.
 - It is called explicitly from one place: the admin score-entry server action, after the manual write to `match.home_score` / `match.away_score`.
-- A `BEFORE INSERT OR UPDATE ON bet_match` trigger remains — `bet_match_locked` — which rejects writes when `now() >= match.kickoff_at`. This is a hard data integrity rule, not a scoring concern, so a trigger is the right place.
+- A `BEFORE INSERT OR UPDATE OR DELETE ON bet_match` trigger remains — `bet_match_locked` — which rejects writes (including deletes, since a deleted bet would silently downgrade to a missing-prediction zero per §4.4 of requirements) when `now() >= match.kickoff_at`. This is a hard data integrity rule, not a scoring concern, so a trigger is the right place.
+
+**Per-match scoring is regulation-time only.** `recompute_match` compares the home/away scores stored on the match row, which the admin enters as the regulation-time result. A knockout match that ended 1-1 in regulation and was decided 4-2 on penalties is scored against the 1-1. `is_correct_winner` is false for any prediction that picked a non-draw against an actual regulation-time draw, even when the predicted team later advanced. Penalties / extra-time advancement only matters for the champion bonus (see below) via `match.winner_team_id`.
 
 Idempotency: `recompute_match` performs `INSERT … ON CONFLICT DO UPDATE`. Calling it twice with the same input produces the same `score` rows.
 
 A separate function **`recompute_bonuses(pool_id uuid) returns void`** computes group / knockout / champion bonuses per `requirements.md` §4.2. It is called from the same admin score-entry server action that calls `recompute_match`, immediately after the match write — so corrections propagate through both layers in one round-trip. To stay idempotent under score corrections (e.g. admin re-enters a wrong score and the group standings flip), the function first DELETEs every bonus row in the target pool whose `kind` it owns (`group_*` and `champion`) and then re-INSERTs the currently-correct ones. A helper `compute_group_standings()` returns one row per (group_code, team_id, place) once all six matches in a group are finished; tiebreakers are points → goal difference → goals scored → alphabetical (full FIFA tiebreak chain is out of MVP scope).
+
+**Champion bonus — `winner_team_id`-first, score-fallback.** The +20 champion bonus needs to know who won the final, but a final decided on penalties has `home_score = away_score`. Migration 0010 adds a nullable `winner_team_id` column on `match` (constrained to be one of the two listed teams). `recompute_bonuses` resolves the champion by `coalesce(m.winner_team_id, <case on score comparison>)` — so admins who never set `winner_team_id` for regulation-decisive finals get the right answer for free, and finals decided on pens require the admin to set `winner_team_id` (the admin form rejects a level knockout score with no winner). Group matches stay `winner_team_id is null` — draws ARE the result there.
 
 ### 4.2 RLS policies — explicit predicates
 
@@ -535,13 +563,16 @@ Order on the client by `points desc, exact_count desc, correct_winner_count desc
 There is no external sports data API. Match scores arrive in the system through a single path: an admin opens the admin panel, enters the score, submits.
 
 **Flow:**
-1. Admin navigates to `/admin/jogos/[matchId]` (reached by direct URL from the matches list when logged in as an admin of any pool).
-2. Form shows two number inputs (home/away) and the match metadata.
-3. On submit, the server action:
-   a. Verifies `exists (select 1 from pool where admin_id = auth.uid())` — any pool admin may edit any score (architecture §2.4 / §6).
-   b. Writes `home_score`, `away_score`, and sets `status = 'finished'` on the `match` row.
-   c. Calls `recompute_match(match_id)` to upsert `score` rows for every `bet_match` against that match.
-4. Realtime subscribers on `score` get notified; ranking pages across all pools refresh within ~60s.
+1. Admin navigates to `/admin/jogos/[matchId]` — either by direct URL or via the "Editar resultado / horário →" link rendered on `/jogos/[matchId]` for users who admin at least one pool. The `/admin/*` route segment is gated by `app/admin/layout.tsx`, which `notFound()`s any user not in `pool.admin_id`.
+2. The page renders two cards. The **score card** has two number inputs (home/away). For knockout matches it also renders a winner picker (`<select>` with "decided by score" / "home advanced" / "away advanced") used when the regulation score is level (penalties / coin toss). The **kickoff card** lets the admin reschedule a postponed fixture by submitting a `datetime-local` value in their browser TZ plus a hidden `kickoffTzOffsetMinutes` field, so the server converts to UTC without trusting browser ISO output.
+3. On submit, the score server action (`app/admin/jogos/[matchId]/actions.ts → saveScore`):
+   a. Re-verifies the any-pool-admin invariant via `assertAnyPoolAdmin()` — defense in depth on top of the layout guard.
+   b. Validates the input with Zod (`home_score`/`away_score` in [0,20], optional `winner_team_id`). Rejects a knockout submission with `home_score = away_score` and no `winner_team_id` with a PT-BR error. Rejects a `winner_team_id` that isn't one of the two listed teams (defense in depth on top of the `match_winner_is_a_team` CHECK).
+   c. Switches to the **service-role client** (`lib/supabase/service.ts → createServiceClient()`) and writes `home_score`, `away_score`, `winner_team_id` (NULL for group matches), and `status = 'finished'` on the `match` row. The browser/SSR client cannot do this — `match` has only `match_public_select` per §4.2; there is no INSERT/UPDATE policy. The service-role boundary lives in exactly this one place.
+   d. Calls `recompute_match(match_id)` to upsert `score` rows for every `bet_match` against that match.
+   e. Loops `recompute_bonuses(pool_id)` over every row in `pool` — match data is global, so a score correction can flip group standings in any pool. The fan-out is sequential and matches the MVP cap (≤30 users × ≤10 pools = a handful of `pool` rows); if user count grows materially this loop should be replaced with a single SQL function that iterates pools internally.
+4. The kickoff server action (`saveKickoff`) re-verifies admin, converts the local datetime + offset to UTC, and updates `match.kickoff_at` only — no scoring side effects.
+5. Realtime subscribers on `score` and `bonus` (publication opted-in by 0009) get notified; ranking pages across all pools refresh within ~1s via `router.refresh()` driven by the `<RankingLive />` Client Component.
 
 **Cron strategy (declared in `vercel.json`):**
 - `/api/cron/send-reminders` — hourly. Finds users in any pool with no prediction for a match starting in the next 12-24h and sends a Resend email; the `reminder_sent (user_id, match_id)` table prevents duplicates across runs.
@@ -565,7 +596,7 @@ There is no external sports data API. Match scores arrive in the system through 
   1. Refresh the Supabase session.
   2. Redirect unauthenticated requests to `/entrar`.
   3. **Set a default `active_pool_id` cookie** if absent: SELECT the user's most-recently-joined `pool_member.pool_id` and write the cookie. If the user has zero memberships, redirect to `/` (the "Meus bolões" dashboard with a "Criar/Entrar em bolão" prompt).
-- **Admin guard for score override:** `admin/jogos/[matchId]/page.tsx` checks `exists (select 1 from pool where admin_id = auth.uid())` — i.e., the user must admin at least one pool. Because match data is global, any pool admin may correct any score. Pool-metadata edits (renaming, regenerating invite code) are scoped to that pool's `admin_id`.
+- **Admin guard for score override:** `app/admin/layout.tsx` runs an `exists (select 1 from pool where admin_id = auth.uid())` check on every request to `/admin/*` and `notFound()`s the response if false. Because match data is global, any pool admin may correct any score. The score server action re-runs the same check via `assertAnyPoolAdmin()` so a stale layout decision can't be bypassed by a direct POST. Pool-metadata edits (renaming, regenerating invite code) are scoped to that pool's `admin_id` and live under `/(app)/boloes/*`, not under `/admin/*`. There is no `/admin` index page — admins reach the per-match editor from the "Editar resultado / horário →" link on `/jogos/[matchId]` or by typing the URL. Deliberate: the only admin operation in the MVP is per-match editing, so a list page would just duplicate `/jogos`.
 - **Authorization helpers** in `lib/pool.ts`:
   - `readActivePoolId(): Promise<string>` — reads the cookie or falls back to the user's first membership.
   - `assertMember(poolId, userId): Promise<void>` — throws if the user is not a member; called by every server action that mutates pool-scoped data.

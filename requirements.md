@@ -71,6 +71,15 @@ To avoid leaking which emails are registered, the request form always returns a 
 3. Selecting another pool stores the new active pool ID in a cookie (`active_pool_id`) and navigates to that pool's matches page.
 4. All app pages (jogos, palpites, ranking, admin) read the active pool from the cookie; if missing, the middleware sets it to the user's first membership.
 
+### 3.4b Score entry (admin path)
+1. After a match's full time, any user who admins at least one pool can click **"Editar resultado / horário →"** on the match's detail page (or hit `/admin/jogos/[matchId]` directly).
+2. The form has two number inputs for `home` and `away` regulation-time goals (0-20 each).
+3. For **knockout matches that end level in regulation**, a "vencedor" selector appears with three options: "decidido pelo placar", "[home] avançou", "[away] avançou". When the score is level, picking a winner is **required** (penalties or coin toss). The selector is also visible for non-level knockouts but can stay on "decidido pelo placar" — the score is decisive.
+4. Submitting writes the score, sets the match status to `finished`, and triggers a per-match recompute plus a fan-out across every pool's group/champion bonuses (idempotent, so corrections work the same way).
+5. A separate "Reagendar jogo" form on the same page lets the admin change `kickoff_at` for a postponed fixture without touching the score.
+
+The trust model is that all pool admins are trusted friends; any pool admin can edit any match's score (match data is global).
+
 ### 3.5 Match prediction (most-used flow)
 1. Participant opens **"Jogos"** — list grouped by date, scoped to the active pool.
 2. Taps a match before kickoff.
@@ -121,6 +130,8 @@ Example with actual result `Brasil 2-1 Argentina`:
 - Prediction `Brasil 3-2 Argentina` → 7 pts (correct winner + diff of 1)
 - Prediction `Brasil 1-0 Argentina` → 5 pts (correct winner only)
 - Prediction `Argentina 1-0 Brasil` → 0 pts
+
+**Per-match scoring uses regulation-time results only.** A knockout match that ended `1-1` in regulation and was decided `4-2` on penalties is scored against `1-1` — a participant who predicted `Brasil 2-1 Argentina` scores 0, not 5, even if Brasil advanced. Extra-time and penalty results only matter for the **champion bonus** in §4.2 (so that a final decided on pens still awards +20 to the participant who picked the right champion).
 
 ### 4.2 Bonus scoring (group / knockout / champion)
 

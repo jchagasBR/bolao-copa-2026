@@ -7,9 +7,9 @@
 
 ## Session log
 
-**Last session ended:** 2026-05-26 — user paused after Phase 5 was verified live (predicted a match, ran `recompute_match` via SQL Editor, watched `/ranking` populate).
-**Current phase:** Phase 5 ✅ verified. Phase 6 (admin score entry) is next.
-**Schedule status:** Phases 0 through 5 all finished on 2026-05-26 — original plan budgeted Days 1–13 (2026-05-22 through 2026-06-03) for this work. **About 8 days ahead of plan.** 16 days until WC kickoff (2026-06-11).
+**Last session ended:** 2026-05-28 — Phase 6 (admin score entry) landed end-to-end, user manually verified the happy path of submitting a score and watching the ranking update. Doc-auditor pass + P0/P1 follow-up applied in the same session.
+**Current phase:** Phase 6 ✅ verified by spot-check and doc-auditor. Phase 7 (email reminders) is next, but is blocked on a verified Resend domain (memory note: sandbox sender only delivers to `j.cesarchagas94@gmail.com`).
+**Schedule status:** Phase 6 was budgeted for 2026-06-04 (Day 14) and landed 7 days early. Phases 0 through 6 now complete; **about 7 days ahead of plan.** 14 days until WC kickoff (2026-06-11).
 
 ### Done (in order, with the commit that closed each piece)
 
@@ -22,8 +22,9 @@
 | **3** — Pool create/join + match bets | 🟢 | `/boloes/criar`, `/boloes/entrar`, real `PoolSwitcher` dropdown, `lib/pool.ts` queries, `<LocalTime />`, `/jogos`, `/jogos/[matchId]`, `/palpites`. RLS recursion fix in 0006. |
 | **4** — Group + champion + bracket placeholder | 🟢 | `/palpites/grupos`, `/palpites/campeao`, `/palpites/mata-mata` placeholder, `/palpites` hub. 0007 bonus table + `compute_group_standings()` + group/champion `recompute_bonuses`. 0008 makes it idempotent under score corrections. doc-auditor pass. |
 | **5** — Ranking + perfil + peer predictions | 🟢 | `/ranking` (live via Realtime), `/perfil` (per-pool stats), `/jogos/[matchId]` post-kickoff peer predictions card. 0009 opted `score` + `bonus` into the realtime publication. User verified live ranking refresh. |
+| **6** — Admin score entry | 🟢 | `/admin/jogos/[matchId]` with score-entry + reagendar forms; new `lib/supabase/service.ts` for the only write path that bypasses RLS. 0010 adds `match.winner_team_id` + the `match_winner_is_a_team` CHECK, and rewrites `recompute_bonuses` so finals decided on penalties still award the champion bonus (closes the Phase 4 P1). Server action recomputes `recompute_match` then loops `recompute_bonuses` across every pool. "Editar resultado / horário →" link wired into `/jogos/[matchId]` for admins. Desktop nav added (`components/desktop-nav.tsx` + shared `components/nav-items.ts`) — Phase 1 only shipped the mobile bottom nav. User manually verified happy-path score entry. Doc-auditor + P0/P1 follow-up applied. |
 
-All 9 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`). The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
+All 10 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`). The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
 
 ### Outstanding manual / external work
 
@@ -284,8 +285,8 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 - [x] **P0:** `recompute_bonuses` now DELETEs every `group_*` and `champion` bonus row for the pool before re-INSERTing. Without this, an admin correcting a wrong score would leave the previous +5/+3/+20 awards in place, double-counting points. Lives in `supabase/migrations/0008_recompute_bonuses_idempotent.sql`.
 - [x] **P1:** `architecture.md` §4 schema block now documents the `bonus` table; §4.1 documents the delete-then-insert idempotency contract and `compute_group_standings()`; §4.2 view block shows the UNION shape; §5 cron strategy note clarifies that `recompute_bonuses` is called by the admin server action, not a cron.
 - [x] **P2:** `0003_scoring.sql` `recompute_bonuses` stub now has a comment pointing readers at 0007 + 0008; `/palpites/mata-mata` copy fixed ("32 times em 16 jogos").
-- [ ] **P1:** finals decided on penalties currently produce no champion bonus because the CASE in `recompute_bonuses` can't pick a winner when `home_score = away_score`. **Decide before 2026-07-19 (final).** Likely fix: add a `winner_team_id uuid` column to `match` populated by the admin for knockout matches that need it, and use it instead of the score comparison. Schedule for Phase 6 (admin score entry) so the change rides along with the new admin form.
-- [ ] **Apply `supabase/migrations/0008_recompute_bonuses_idempotent.sql` in the Supabase SQL Editor.** Idempotent.
+- [x] **P1:** finals decided on penalties currently produce no champion bonus because the CASE in `recompute_bonuses` can't pick a winner when `home_score = away_score`. Closed by `0010_winner_team_id.sql` in Phase 6 (2026-05-28) — added `match.winner_team_id` + `match_winner_is_a_team` CHECK, and rewrote the champion clause to `coalesce(m.winner_team_id, <case on score>)`. The admin form requires `winner_team_id` for any knockout match that ends level in regulation.
+- [x] **Apply `supabase/migrations/0008_recompute_bonuses_idempotent.sql` in the Supabase SQL Editor.** Done 2026-05-26.
 
 **Verify:**
 - A participant completes group bets + champion in under 5 minutes.
@@ -316,24 +317,43 @@ The rule table in `requirements.md` §4.1 says "Correct winner + correct goal di
 
 ---
 
-## Phase 6 — Admin score entry (Day 14: 2026-06-04)
+## Phase 6 — Admin score entry (done 2026-05-28, 7 days early) — 🟢 verified
 
 **Goal:** the admin can enter / edit a match score and have every pool's points recompute.
 
-Scope shrank significantly on 2026-05-23 when we dropped the external sports API (see `architecture.md` §2.6 / §5). What used to be "API wrapper + cron + admin override" is now just the admin form. Estimated at 1 day; surplus day flows into the buffer or earlier-phase slip.
+Scope shrank significantly on 2026-05-23 when we dropped the external sports API (see `architecture.md` §2.6 / §5). What used to be "API wrapper + cron + admin override" is now just the admin form. Estimated at 1 day; landed in 1 session.
 
-- [ ] Implement `/admin/jogos/[matchId]` editor with a score-entry form (home/away number inputs, Zod validation, no list page — reached by direct URL or from `/jogos` when authenticated as a pool admin)
-- [ ] Page guard: visible only if `exists (select 1 from pool where admin_id = auth.uid())` — any pool admin may edit any match score (architecture §2.4 / §6)
-- [ ] Server action: validates input, writes `home_score` / `away_score` / `status='finished'` on the `match` row, then calls `recompute_match(match_id)` — rescore propagates to **every pool's** bets on that match
-- [ ] Add an "edit kickoff" affordance on the same form so the admin can adjust `kickoff_at` if a fixture is postponed
-- [ ] Add a small "Aguardando placar" badge to past-kickoff matches with `status != 'finished'` so participants can see the score is pending entry, not broken
+- [x] Implement `/admin/jogos/[matchId]` editor with a score-entry form (home/away number inputs, Zod validation, no list page — reached by direct URL or from `/jogos` when authenticated as a pool admin)
+- [x] Page guard: moved up to `app/admin/layout.tsx` and runs `exists (select 1 from pool where admin_id = auth.uid())` — any pool admin may edit any match score (architecture §2.4 / §6). Server action re-checks via `assertAnyPoolAdmin()`.
+- [x] Server action: validates input, writes `home_score` / `away_score` / `winner_team_id` / `status='finished'` on the `match` row via the new service-role client, then calls `recompute_match(match_id)` and loops `recompute_bonuses(pool_id)` across every pool — rescore + bonuses propagate to **every pool's** bets on that match
+- [x] Add an "edit kickoff" affordance — separate `saveKickoff` action on the same page; the admin can adjust `kickoff_at` for a postponed fixture without touching scores
+- [x] "Aguardando placar" badge — already shipped in Phase 3 on `/jogos` for past-kickoff matches with `status != 'finished'`
+- [x] `0010_winner_team_id.sql` — adds `match.winner_team_id` + `match_winner_is_a_team` CHECK, rewrites `recompute_bonuses` so the champion clause uses `coalesce(winner_team_id, <case on score>)`. Closes the Phase 4 P1 about finals on penalties.
+- [x] Desktop nav (`components/desktop-nav.tsx` + shared `components/nav-items.ts`) — Phase 1 only shipped the mobile bottom bar, leaving desktop users without a Ranking link. Found and fixed on 2026-05-28.
+
+**Pending (need user / future):**
+
+- [x] **Apply `supabase/migrations/0010_winner_team_id.sql` in the Supabase SQL Editor.** Done 2026-05-28 — verified by the admin form successfully writing `winner_team_id` during the happy-path test.
+- [x] **Run `doc-auditor` subagent.** Done 2026-05-28. P0/P1 items addressed in the "Phase 6 doc-audit follow-up" sub-section below.
+- [ ] **Correction-case E2E test:** re-submit a different score for the same match; confirm `/ranking` updates again with no leftover bonus rows.
+- [ ] **Non-admin guard E2E test:** sign out (or log in as a non-admin) and hit `/admin/jogos/<id>` directly → expect 404.
+
+### Phase 6 doc-audit follow-up (2026-05-28)
+
+Tightening pass after the `doc-auditor` report. **All docs-only — no code or migrations changed.**
+
+- [x] **P0:** `architecture.md` §4 schema block updated to include `winner_team_id` + `match_winner_is_a_team` CHECK. §4.1 prose now documents the winner_team_id-first / score-fallback contract in `recompute_bonuses`, plus the regulation-time-only invariant for `recompute_match`.
+- [x] **P0:** `architecture.md` §5 "Flow" rewritten to list all writes (score + status + winner_team_id), both recomputations (recompute_match + loop of recompute_bonuses across all pools), and the service-role boundary (`lib/supabase/service.ts`) since `match` has no INSERT/UPDATE policy.
+- [x] **P1:** `architecture.md` §3 repo layout now lists the new admin files (`actions.ts`, `score-form.tsx`, `kickoff-form.tsx`), `lib/supabase/service.ts`, `components/nav-items.ts`, `components/desktop-nav.tsx`, and migrations 0006-0010. §6 admin guard description moved to the layout level, and a note added that `/admin` has no index page on purpose.
+- [x] **P1:** `requirements.md` §3.4b added (admin score-entry sub-flow including the pênaltis winner prompt). §4.1 clarified that per-match scoring uses regulation-time results only.
+- [x] **P2:** This session-log update.
 
 **Verify:**
-- Admin enters a score in the panel and the ranking updates within 60 seconds.
-- Re-entering a different score for the same match (correction case) updates ranking again without errors (idempotent `recompute_match`).
-- A non-admin user hitting `/admin/jogos/[matchId]` gets `notFound()`.
-- A past-kickoff unscored match shows "Aguardando placar" on the participant `/jogos` view.
-- **Run `doc-auditor` subagent.** Address any P0/P1 items in its report before moving to Phase 7.
+- Admin enters a score in the panel and the ranking updates within 60 seconds. — **Done 2026-05-28, observed live by user.**
+- Re-entering a different score for the same match (correction case) updates ranking again without errors (idempotent `recompute_match`). — _pending E2E_
+- A non-admin user hitting `/admin/jogos/[matchId]` gets `notFound()`. — _pending E2E_
+- A past-kickoff unscored match shows "Aguardando placar" on the participant `/jogos` view. — already verified in Phase 3.
+- **Run `doc-auditor` subagent.** Address any P0/P1 items in its report before moving to Phase 7. — **Done 2026-05-28.**
 
 ---
 
