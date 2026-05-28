@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeMatchPoints } from "@/lib/scoring/match";
-import { sortRanking, type RankingRow } from "@/lib/scoring/ranking";
+import { sortRanking, withSharedPositions, type RankingRow } from "@/lib/scoring/ranking";
 
 describe("computeMatchPoints — requirements §4.1", () => {
   it("awards 10 points for an exact score (home win)", () => {
@@ -137,7 +137,12 @@ describe("sortRanking — requirements §4.5", () => {
     expect(sortRanking(rows).map((r) => r.user_id)).toEqual(["u2", "u1"]);
   });
 
-  it("breaks all-equal ties alphabetically (PT-BR locale)", () => {
+  it("falls back to alphabetical name order for stable display only (not a winner-determination criterion — see §4.5)", () => {
+    // Users tied on points + exact_count + correct_winner_count share the
+    // title at end of tournament. The alphabetical sort here is purely
+    // cosmetic — it keeps the ranking page row order stable across realtime
+    // re-renders. UI consumers showing "1º, 2º" position numbers should
+    // assign equal positions to all rows above this fallback.
     const rows = [
       baseRow({ user_id: "u1", name: "Zé" }),
       baseRow({ user_id: "u2", name: "Ana" }),
@@ -154,5 +159,106 @@ describe("sortRanking — requirements §4.5", () => {
     const snapshot = JSON.stringify(rows);
     sortRanking(rows);
     expect(JSON.stringify(rows)).toBe(snapshot);
+  });
+});
+
+describe("withSharedPositions — requirements §4.5 (tied users share a position)", () => {
+  const baseRow = (
+    overrides: Partial<RankingRow> & { user_id: string },
+  ): RankingRow => ({
+    name: overrides.name ?? "Anônimo",
+    points: 0,
+    exact_count: 0,
+    correct_winner_count: 0,
+    ...overrides,
+  });
+
+  it("assigns 1, 2, 3, … when there are no ties", () => {
+    const sorted = sortRanking([
+      baseRow({ user_id: "u1", name: "Ana", points: 30 }),
+      baseRow({ user_id: "u2", name: "Bia", points: 20 }),
+      baseRow({ user_id: "u3", name: "Caio", points: 10 }),
+    ]);
+    expect(withSharedPositions(sorted).map((r) => [r.user_id, r.position])).toEqual([
+      ["u1", 1],
+      ["u2", 2],
+      ["u3", 3],
+    ]);
+  });
+
+  it("shares 1st place when two users tie on all winner criteria (1, 1, 3)", () => {
+    const sorted = sortRanking([
+      baseRow({
+        user_id: "u1",
+        name: "Ana",
+        points: 30,
+        exact_count: 3,
+        correct_winner_count: 5,
+      }),
+      baseRow({
+        user_id: "u2",
+        name: "Bia",
+        points: 30,
+        exact_count: 3,
+        correct_winner_count: 5,
+      }),
+      baseRow({ user_id: "u3", name: "Caio", points: 20 }),
+    ]);
+    // Even though sortRanking puts Ana before Bia alphabetically, both share 1st.
+    expect(withSharedPositions(sorted).map((r) => [r.user_id, r.position])).toEqual([
+      ["u1", 1],
+      ["u2", 1],
+      ["u3", 3],
+    ]);
+  });
+
+  it("does NOT share position when the tie is broken by exact_count or correct_winner_count", () => {
+    const sorted = sortRanking([
+      baseRow({
+        user_id: "u1",
+        name: "Ana",
+        points: 30,
+        exact_count: 3,
+        correct_winner_count: 5,
+      }),
+      baseRow({
+        user_id: "u2",
+        name: "Bia",
+        points: 30,
+        exact_count: 2,
+        correct_winner_count: 5,
+      }),
+    ]);
+    expect(withSharedPositions(sorted).map((r) => [r.user_id, r.position])).toEqual([
+      ["u1", 1],
+      ["u2", 2],
+    ]);
+  });
+
+  it("handles a mid-pack tie correctly (1, 2, 2, 4)", () => {
+    const sorted = sortRanking([
+      baseRow({ user_id: "u1", name: "Ana", points: 40 }),
+      baseRow({
+        user_id: "u2",
+        name: "Bia",
+        points: 30,
+        exact_count: 1,
+        correct_winner_count: 2,
+      }),
+      baseRow({
+        user_id: "u3",
+        name: "Caio",
+        points: 30,
+        exact_count: 1,
+        correct_winner_count: 2,
+      }),
+      baseRow({ user_id: "u4", name: "Duda", points: 10 }),
+    ]);
+    expect(withSharedPositions(sorted).map((r) => [r.user_id, r.position])).toEqual([
+      ["u1", 1],
+      ["u2", 2],
+      ["u3", 2],
+      ["u4", 4],
+    ]);
   });
 });

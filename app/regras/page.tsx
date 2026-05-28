@@ -143,12 +143,21 @@ export default function RegrasPage() {
           <CardTitle className="text-base">5. Desempate no ranking</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>Em caso de empate em pontos:</p>
+          <p>Em caso de empate em pontos, a ordem é:</p>
           <ol className="ml-5 list-decimal space-y-1">
             <li>Quem tem mais placares cravados (exatos).</li>
             <li>Quem tem mais vencedores certos.</li>
-            <li>Ordem alfabética pelo nome.</li>
           </ol>
+          <p>
+            Se ainda assim houver empate <strong>ao final do bolão</strong>,{" "}
+            <strong>o título é dividido</strong> — vocês são campeões juntos.
+            Não existe desempate por ordem alfabética nem nada do tipo.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Durante a Copa, o ranking mostra os empatados em ordem alfabética só
+            pra ficar estável visualmente; isso não significa que um tá &quot;na
+            frente&quot; do outro.
+          </p>
         </CardContent>
       </Card>
 

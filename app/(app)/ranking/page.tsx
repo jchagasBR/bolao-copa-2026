@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listMyPools, readActivePoolId } from "@/lib/pool";
-import { sortRanking, type RankingRow } from "@/lib/scoring/ranking";
+import { sortRanking, withSharedPositions, type RankingRow } from "@/lib/scoring/ranking";
 import { RankingLive } from "./live";
 
 export const metadata = {
@@ -27,7 +27,7 @@ export default async function RankingPage() {
     .eq("pool_id", activeId)
     .returns<RankingRow[]>();
 
-  const ranking = sortRanking(rows ?? []);
+  const ranking = withSharedPositions(sortRanking(rows ?? []));
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 space-y-6">
@@ -46,7 +46,7 @@ export default async function RankingPage() {
         </div>
       ) : (
         <ol className="rounded-lg border bg-card divide-y">
-          {ranking.map((row, idx) => {
+          {ranking.map((row) => {
             const isMe = row.user_id === user?.id;
             return (
               <li
@@ -57,7 +57,7 @@ export default async function RankingPage() {
                 }
               >
                 <span className="w-7 shrink-0 text-center text-sm font-semibold tabular-nums text-muted-foreground">
-                  {idx + 1}
+                  {row.position}º
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">

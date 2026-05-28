@@ -171,11 +171,15 @@ These bonus values are **confirmed by the admin in Phase 0** of `implementation.
 - No additional penalty. Missing is simply zero.
 
 ### 4.5 Tie-breakers for ranking
-In order:
+
+**Winner-determination criteria** (canonical, used to crown the pool champion at end of tournament):
 1. Total points (descending)
 2. Number of exact scores (descending)
 3. Number of correct winners (descending)
-4. Alphabetical by display name
+
+If two or more participants tie on all three at the end of the tournament, **the title is shared** — there is no further tiebreaker. The product explicitly refuses to crown a champion based on name order or any other cosmetic criterion (community decision: ties are real, dividing the title is more legitimate than arbitrary disambiguation).
+
+**Display-sort fallback** (during the competition, for the ranking page only): after the three criteria above, tied rows are rendered in alphabetical name order so the list stays visually stable across re-renders. This ordering is **not** a ranking signal — both `lib/scoring/ranking.ts` and any consumer should treat alphabetically-adjacent tied users as equally ranked.
 
 ### 4.6 Invite codes and pool membership
 - Format: `COPA-XXXX` where `XXXX` is 4 uppercase alphanumeric characters, globally unique.

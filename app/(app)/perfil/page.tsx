@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Crown, Trophy, BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { listMyPools, readActivePoolId } from "@/lib/pool";
-import { sortRanking, type RankingRow } from "@/lib/scoring/ranking";
+import { sortRanking, withSharedPositions, type RankingRow } from "@/lib/scoring/ranking";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OptOutToggle } from "./opt-out-toggle";
 
@@ -51,15 +51,14 @@ export default async function PerfilPage() {
         .select("user_id, name, points, exact_count, correct_winner_count")
         .eq("pool_id", pool.id)
         .returns<RankingRow[]>();
-      const ranking = sortRanking(rows ?? []);
-      const myIdx = ranking.findIndex((r) => r.user_id === user.id);
-      const mine = myIdx >= 0 ? ranking[myIdx] : null;
+      const ranking = withSharedPositions(sortRanking(rows ?? []));
+      const mine = ranking.find((r) => r.user_id === user.id) ?? null;
       return {
         pool_id: pool.id,
         name: pool.name,
         is_admin: pool.is_admin,
         member_count: pool.member_count,
-        position: myIdx >= 0 ? myIdx + 1 : null,
+        position: mine?.position ?? null,
         points: mine?.points ?? 0,
         exact_count: mine?.exact_count ?? 0,
         correct_winner_count: mine?.correct_winner_count ?? 0,
