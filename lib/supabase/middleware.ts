@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATH_PREFIXES = ["/entrar", "/cadastro", "/recuperar", "/auth"];
+// `/api` is here so the middleware doesn't redirect anonymous requests to
+// /entrar — API routes do their own auth (e.g. the reminder cron checks a
+// Bearer header against CRON_SECRET).
+const PUBLIC_PATH_PREFIXES = ["/entrar", "/cadastro", "/recuperar", "/auth", "/api"];
 const ACTIVE_POOL_COOKIE = "active_pool_id";
 
 function isPublicPath(pathname: string): boolean {
