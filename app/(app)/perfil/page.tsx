@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listMyPools, readActivePoolId } from "@/lib/pool";
 import { sortRanking, type RankingRow } from "@/lib/scoring/ranking";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { OptOutToggle } from "./opt-out-toggle";
 
 export const metadata = {
   title: "Perfil — Bolão Copa 2026",
@@ -35,10 +36,11 @@ export default async function PerfilPage() {
 
   const { data: profile } = await supabase
     .from("profile")
-    .select("name")
+    .select("name, email_opt_out")
     .eq("id", user.id)
     .maybeSingle();
   const displayName = profile?.name ?? user.email ?? "Você";
+  const emailOptOut = profile?.email_opt_out ?? false;
 
   // For each pool, read the full ranking, sort, find this user's row.
   // N small queries (one per pool, capped at 10). Acceptable for the MVP.
@@ -139,6 +141,13 @@ export default async function PerfilPage() {
             })}
           </ul>
         )}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Notificações
+        </h2>
+        <OptOutToggle initialValue={emailOptOut} />
       </section>
 
       <section className="space-y-2">
