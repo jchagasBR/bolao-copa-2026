@@ -3,8 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // `/api` is here so the middleware doesn't redirect anonymous requests to
 // /entrar — API routes do their own auth (e.g. the reminder cron checks a
-// Bearer header against CRON_SECRET).
-const PUBLIC_PATH_PREFIXES = ["/entrar", "/cadastro", "/recuperar", "/auth", "/api"];
+// Bearer header against CRON_SECRET). `/regras` is public so people can read
+// the scoring rules before signing up.
+const PUBLIC_PATH_PREFIXES = ["/entrar", "/cadastro", "/recuperar", "/auth", "/api", "/regras"];
 const ACTIVE_POOL_COOKIE = "active_pool_id";
 
 function isPublicPath(pathname: string): boolean {

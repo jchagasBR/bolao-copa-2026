@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Crown, Trophy } from "lucide-react";
+import { Crown, Trophy, BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { listMyPools, readActivePoolId } from "@/lib/pool";
 import { sortRanking, type RankingRow } from "@/lib/scoring/ranking";
@@ -163,6 +163,16 @@ export default async function PerfilPage() {
               <Trophy className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
               <span className="flex-1 text-sm font-medium">Ver meus palpites</span>
               <span className="text-xs text-muted-foreground">No bolão ativo →</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/regras"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-muted/40"
+            >
+              <BookOpen className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="flex-1 text-sm font-medium">Regras do bolão</span>
+              <span className="text-xs text-muted-foreground">Pontos e prazos →</span>
             </Link>
           </li>
         </ul>
