@@ -4,11 +4,17 @@ import { render } from "@react-email/components";
 import { createServiceClient } from "@/lib/supabase/service";
 import { BetReminderEmail } from "@/emails/bet-reminder";
 
-// Vercel cron declares this in vercel.json; runs hourly. Also callable
-// manually for local testing with the same Bearer token.
+// Vercel cron declares this in vercel.json; runs once daily at 12:00 UTC
+// (= 09:00 BRT). Also callable manually for local testing with the same
+// Bearer token.
+//
+// Vercel Hobby plan only allows daily crons, so we widened the window from
+// the originally-spec'd "12-24h before kickoff" to "anywhere in the next
+// 24h". A user who signs up between two cron runs and immediately joins a
+// pool would still get reminded the next morning, before any next-day match.
 //
 // Logic per requirements §3 and architecture §7:
-//  - For every (user, match) where the match kicks off in the next 12-24h,
+//  - For every (user, match) where the match kicks off in the next 24h,
 //    and the user is a member of at least one pool, and the user has no
 //    bet_match for that match in any pool they belong to, and the user has
 //    not opted out of reminders, and we have not already sent a reminder for
@@ -78,11 +84,12 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient();
   const resend = new Resend(resendKey);
 
-  // Window: now+12h .. now+24h. Hourly cron runs at :00 every hour, so each
-  // match enters the window for 12 consecutive runs. The reminder_sent dedup
-  // is what keeps each user from getting 12 copies.
+  // Window: now .. now+24h. Daily cron runs at 12:00 UTC, so each match
+  // enters the window exactly once (the day before its kickoff). The
+  // reminder_sent dedup is what keeps each user from getting a second copy
+  // on manual cron triggers or if the schedule misfires.
   const now = new Date();
-  const windowStart = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+  const windowStart = now;
   const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   // 1) Pull every match in the window with both teams populated.

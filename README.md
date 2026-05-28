@@ -88,7 +88,7 @@ On the same `/admin/jogos/<matchId>` page, the **"Reagendar jogo"** card lets th
 
 ### Manually triggering the reminder cron
 
-Vercel Cron fires `/api/cron/send-reminders` hourly in production. To test locally or manually trigger:
+Vercel Cron fires `/api/cron/send-reminders` once daily at 12:00 UTC (= 09:00 BRT) in production. To test locally or manually trigger:
 
 ```sh
 curl.exe -H "Authorization: Bearer ${CRON_SECRET}" http://localhost:3000/api/cron/send-reminders

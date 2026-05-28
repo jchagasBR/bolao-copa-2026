@@ -364,16 +364,16 @@ Tightening pass after the `doc-auditor` report. **All docs-only — no code or m
 **Goal:** users get a heads-up before they miss a bet.
 
 - [x] Create React Email template `emails/bet-reminder.tsx` (PT-BR, São Paulo time + "(horário de Brasília)" + relative hours, "Palpitar agora" CTA).
-- [x] Implement `app/api/cron/send-reminders/route.ts` — hourly, Bearer-gated by `CRON_SECRET`. Pulls every match in the `now+12h .. now+24h` window, calls the new `users_missing_prediction(match_id)` SQL function per match, renders the email via `@react-email/components`, sends via Resend, inserts a `reminder_sent` row to dedupe across runs. Race-safe: a duplicate-key error from a concurrent run is treated as a benign "already sent".
+- [x] Implement `app/api/cron/send-reminders/route.ts` — daily at 12:00 UTC (= 09:00 BRT), Bearer-gated by `CRON_SECRET`. Pulls every match in the `now .. now+24h` window, calls the new `users_missing_prediction(match_id)` SQL function per match, renders the email via `@react-email/components`, sends via Resend, inserts a `reminder_sent` row to dedupe across runs. Race-safe: a duplicate-key error from a concurrent run is treated as a benign "already sent". Schedule was originally hourly with a 12-24h window, downgraded to daily during the Phase 9 Vercel deploy because Hobby plan caps cron frequency at once per day.
 - [x] `supabase/migrations/0011_users_missing_prediction.sql` — `SECURITY DEFINER` function returning `(user_id, email, name)` for users who are pool members, have no `bet_match` for the match in any of their pools, are not `email_opt_out`, and haven't been reminded yet. Function is service-role only (no grant to `authenticated`/`anon`) so it can't leak email addresses.
-- [x] `vercel.json` declares `/api/cron/send-reminders` on the `0 * * * *` schedule.
+- [x] `vercel.json` declares `/api/cron/send-reminders` on the `0 12 * * *` schedule (daily at 12:00 UTC = 09:00 BRT).
 - [x] Expose the `profile.email_opt_out` toggle on `/perfil` — `OptOutToggle` (Client) auto-submits on change via `requestSubmit()`, server action upserts on `profile`.
 
 **Pending (need user / external):**
 
 - [ ] **Apply `supabase/migrations/0011_users_missing_prediction.sql` in the Supabase SQL Editor.** Idempotent — uses `CREATE OR REPLACE`.
 - [ ] **Set `CRON_SECRET` in `.env.local`** (generate with e.g. `openssl rand -base64 32`). The cron route returns 401 without it.
-- [ ] **Local E2E smoke test** — fake-shift a match into the 12-24h window via SQL, hit `http://localhost:3001/api/cron/send-reminders` with `Authorization: Bearer <secret>` (curl / Thunder Client / browser DevTools), confirm the reminder lands in the account-owner inbox (sandbox sender limit applies until the Resend domain is verified — see Phase 9 carry-over).
+- [ ] **Local E2E smoke test** — fake-shift a match into the next 24h via SQL, hit `http://localhost:3001/api/cron/send-reminders` with `Authorization: Bearer <secret>` (curl / Thunder Client / browser DevTools), confirm the reminder lands in the account-owner inbox (sandbox sender limit applies until the Resend domain is verified — see Phase 9 carry-over).
 - [ ] **Multi-user E2E** is deferred to Phase 9 (waiting on a verified Resend domain).
 - [ ] **Set `CRON_SECRET` and `APP_URL` in Vercel project env vars** when the project is created (Phase 9).
 

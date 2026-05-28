@@ -111,8 +111,8 @@ The trust model is that all pool admins are trusted friends; any pool admin can 
 
 ### 3.9b Email reminders (passive flow)
 1. Participant joins a pool and stays opted in by default (no action needed).
-2. Approximately 12-24h before a match's kickoff, if they have not submitted a prediction for that match in any of their pools, they receive a single PT-BR reminder email: "Você ainda não palpitou: [home] × [away]". The email shows the kickoff in São Paulo time labeled "(horário de Brasília)" plus a relative phrase, and includes a "Palpitar agora" button deep-linking to `/jogos/[matchId]`.
-3. **Exactly one email per (participant, match) pair, ever.** Even if the participant remains unpredicted through multiple hourly cron passes, only the first send produces an email; later passes are dedup'd by the `reminder_sent` table.
+2. On the morning before a match (cron runs once daily at 09:00 BRT), if they have not submitted a prediction for that match in any of their pools, they receive a single PT-BR reminder email: "Você ainda não palpitou: [home] × [away]". The email shows the kickoff in São Paulo time labeled "(horário de Brasília)" plus a relative phrase, and includes a "Palpitar agora" button deep-linking to `/jogos/[matchId]`.
+3. **Exactly one email per (participant, match) pair, ever.** Even if the participant remains unpredicted through multiple cron passes, only the first send produces an email; later passes are dedup'd by the `reminder_sent` table.
 4. If the participant predicts the match after receiving the email, no further reminder is sent for that match (they're already covered).
 5. To stop receiving any future reminders, the participant toggles "Não quero receber emails de lembrete" on `/perfil`. The toggle takes effect on the next cron run.
 

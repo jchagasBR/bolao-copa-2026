@@ -134,7 +134,7 @@ export default function RegrasPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p>Quem não palpitou num jogo ganha <strong>0</strong> ali. Sem multa, sem desconto — só zero mesmo.</p>
-          <p>A gente manda um email ~12-24h antes de cada jogo pra quem ainda não palpitou. Dá pra desativar no <Link href="/perfil" className="font-medium underline-offset-4 hover:underline">seu perfil</Link>.</p>
+          <p>A gente manda um email no dia anterior a cada jogo pra quem ainda não palpitou. Dá pra desativar no <Link href="/perfil" className="font-medium underline-offset-4 hover:underline">seu perfil</Link>.</p>
         </CardContent>
       </Card>
 

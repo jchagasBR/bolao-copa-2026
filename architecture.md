@@ -583,7 +583,7 @@ There is no external sports data API. Match scores arrive in the system through 
 5. Realtime subscribers on `score` and `bonus` (publication opted-in by 0009) get notified; ranking pages across all pools refresh within ~1s via `router.refresh()` driven by the `<RankingLive />` Client Component.
 
 **Cron strategy (declared in `vercel.json`):**
-- `/api/cron/send-reminders` — hourly. Finds users in any pool with no prediction for a match starting in the next 12-24h and sends a Resend email; the `reminder_sent (user_id, match_id)` table prevents duplicates across runs.
+- `/api/cron/send-reminders` — runs once daily at 12:00 UTC (09:00 BRT). Finds users in any pool with no prediction for a match starting in the next 24h and sends a Resend email; the `reminder_sent (user_id, match_id)` table prevents duplicates across runs. Schedule constrained by Vercel Hobby's "1 cron run per day" limit; bumping to Pro would allow hourly precision but isn't worth the cost for ≤30 users.
 - _(No `sync-scores` cron — match data is admin-driven.)_
 - _(No `recompute_bonuses` cron either — the function is called from the admin score-entry server action right after `recompute_match`, so bonuses refresh on every score write or correction.)_
 
@@ -612,8 +612,8 @@ There is no external sports data API. Match scores arrive in the system through 
 ## 7. Email notifications
 
 - **Template:** React Email, single template `emails/bet-reminder.tsx` with the participant's name, the match metadata (stage + teams), São Paulo time labeled "(horário de Brasília)" plus a relative phrase ("Começa em ~12h"), and a "Palpitar agora" CTA deep-linking to `/jogos/[matchId]`.
-- **Trigger:** `app/api/cron/send-reminders/route.ts` runs hourly via Vercel Cron (declared in `vercel.json` at `0 * * * *`). Gated by an `Authorization: Bearer ${CRON_SECRET}` header — Vercel Cron sets this automatically when `CRON_SECRET` is in the project env vars; locally the user passes the same header by hand.
-- **Selection logic** (per match in the `now+12h .. now+24h` window): a SECURITY DEFINER SQL function `users_missing_prediction(match_id)` returns `(user_id, email, name)` for users who are pool members, have no `bet_match` for the match in any of their pools, are not `email_opt_out`, and haven't already been reminded. The function is granted only to the service role — it joins `auth.users` for the email and would leak addresses if exposed.
+- **Trigger:** `app/api/cron/send-reminders/route.ts` runs once daily at 12:00 UTC via Vercel Cron (declared in `vercel.json` at `0 12 * * *`). Gated by an `Authorization: Bearer ${CRON_SECRET}` header — Vercel Cron sets this automatically when `CRON_SECRET` is in the project env vars; locally the user passes the same header by hand. (Hobby plan only allows daily crons; we accepted slightly less precision instead of the $20/mo Pro upgrade.)
+- **Selection logic** (per match in the `now .. now+24h` window): a SECURITY DEFINER SQL function `users_missing_prediction(match_id)` returns `(user_id, email, name)` for users who are pool members, have no `bet_match` for the match in any of their pools, are not `email_opt_out`, and haven't already been reminded. The function is granted only to the service role — it joins `auth.users` for the email and would leak addresses if exposed.
 - **Idempotency:** the `reminder_sent (user_id, match_id)` PK rejects duplicate inserts from concurrent runs; the cron treats the duplicate-key error as a benign "already sent". A user who predicts the match between two cron runs drops out of the selection naturally — no email goes out.
 - **Opt-out:** `profile.email_opt_out` boolean (see §4 schema), toggled on `/perfil` via an auto-submitting `OptOutToggle` Client Component. The selection query filters opt-outs at source.
 

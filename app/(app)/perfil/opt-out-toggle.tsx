@@ -30,7 +30,7 @@ export function OptOutToggle({ initialValue }: { initialValue: boolean }) {
           Não quero receber emails de lembrete
         </label>
         <p className="text-xs text-muted-foreground">
-          Por padrão, mandamos um email ~12-24h antes de cada jogo que você
+          Por padrão, mandamos um email no dia anterior a cada jogo que você
           ainda não palpitou. Marque essa opção pra parar de receber.
         </p>
         {pending && (

@@ -107,8 +107,8 @@ After the first successful Vercel deploy with all env vars set, walk through the
 
 ### 4e. Cron route
 
-- [ ] In Supabase SQL Editor, fake-shift another match into the 12-24h window (see README → Operations).
-- [ ] Vercel will fire the cron automatically at the next `:00` of the hour. OR manually trigger from your terminal:
+- [ ] In Supabase SQL Editor, fake-shift another match into the next 24h (see README → Operations).
+- [ ] Vercel will fire the cron automatically at the next 12:00 UTC (= 09:00 BRT). OR manually trigger from your terminal:
   ```sh
   curl.exe -H "Authorization: Bearer <prod CRON_SECRET>" https://<APP_URL>/api/cron/send-reminders
   ```
