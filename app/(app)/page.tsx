@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Users, Crown } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { listMyPools } from "@/lib/pool";
+import { PoolCard } from "@/components/pool-card";
+import { listMyPools, readActivePoolId } from "@/lib/pool";
 
 export const metadata = {
   title: "Meus bolões — Bolão Copa 2026",
@@ -10,6 +10,7 @@ export const metadata = {
 
 export default async function DashboardPage() {
   const pools = await listMyPools();
+  const activeId = await readActivePoolId();
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 space-y-8">
@@ -48,33 +49,7 @@ export default async function DashboardPage() {
           <ul className="grid gap-3 sm:grid-cols-2">
             {pools.map((pool) => (
               <li key={pool.id}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <span className="truncate">{pool.name}</span>
-                      {pool.is_admin && (
-                        <span
-                          title="Você é o admin"
-                          className="inline-flex items-center text-amber-600 dark:text-amber-400"
-                        >
-                          <Crown className="h-4 w-4" aria-hidden />
-                        </span>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <p className="flex items-center gap-1.5 text-muted-foreground">
-                      <Users className="h-3.5 w-3.5" aria-hidden />
-                      {pool.member_count} participante
-                      {pool.member_count === 1 ? "" : "s"}
-                    </p>
-                    {pool.is_admin && (
-                      <p className="text-xs text-muted-foreground">
-                        Código: <code className="font-mono">{pool.invite_code}</code>
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+                <PoolCard pool={pool} isActive={pool.id === activeId} />
               </li>
             ))}
           </ul>
