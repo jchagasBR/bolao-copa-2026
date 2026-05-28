@@ -5,6 +5,7 @@ import { listMyPools, readActivePoolId } from "@/lib/pool";
 import { PoolSwitcher } from "@/components/pool-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { MobileNav } from "@/components/mobile-nav";
+import { DesktopNav } from "@/components/desktop-nav";
 
 export default async function AppLayout({
   children,
@@ -36,6 +37,7 @@ export default async function AppLayout({
           <Link href="/" className="font-semibold tracking-tight">
             Bolão Copa 2026
           </Link>
+          <DesktopNav />
           <div className="flex items-center gap-3">
             <PoolSwitcher pools={switcherPools} activeId={activePoolId} />
             <UserMenu name={displayName} />

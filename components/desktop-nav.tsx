@@ -5,13 +5,13 @@ import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/components/nav-items";
 import { cn } from "@/lib/utils";
 
-export function MobileNav() {
+export function DesktopNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background">
-      <ul className="grid grid-cols-5">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+    <nav className="hidden md:block">
+      <ul className="flex items-center gap-1">
+        {NAV_ITEMS.map(({ href, label }) => {
           const active =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
@@ -19,14 +19,13 @@ export function MobileNav() {
               <Link
                 href={href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 py-2 text-xs",
+                  "rounded-md px-3 py-1.5 text-sm transition-colors",
                   active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-muted font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
               >
-                <Icon className="h-5 w-5" aria-hidden />
-                <span>{label}</span>
+                {label}
               </Link>
             </li>
           );

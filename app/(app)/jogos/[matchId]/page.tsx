@@ -80,6 +80,16 @@ export default async function MatchPage({
     data: { user: me },
   } = await supabase.auth.getUser();
 
+  const { data: adminFlag } = me
+    ? await supabase
+        .from("pool")
+        .select("id")
+        .eq("admin_id", me.id)
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+  const isAdmin = !!adminFlag;
+
   if (locked) {
     const [peerResult, scoreResult] = await Promise.all([
       supabase
@@ -198,6 +208,17 @@ export default async function MatchPage({
           )}
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <p className="text-sm">
+          <Link
+            href={`/admin/jogos/${match.id}`}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Editar resultado / horário →
+          </Link>
+        </p>
+      )}
 
       {locked && peerBets.length > 0 && (
         <Card>
