@@ -7,9 +7,9 @@
 
 ## Session log
 
-**Last session ended:** 2026-05-28 — Phase 6 (admin score entry) landed end-to-end, user manually verified the happy path of submitting a score and watching the ranking update. Doc-auditor pass + P0/P1 follow-up applied in the same session.
-**Current phase:** Phase 6 ✅ verified by spot-check and doc-auditor. Phase 7 (email reminders) is next, but is blocked on a verified Resend domain (memory note: sandbox sender only delivers to `j.cesarchagas94@gmail.com`).
-**Schedule status:** Phase 6 was budgeted for 2026-06-04 (Day 14) and landed 7 days early. Phases 0 through 6 now complete; **about 7 days ahead of plan.** 14 days until WC kickoff (2026-06-11).
+**Last session ended:** 2026-05-28 — Phases 6 and 7 both landed in the same session. Phase 6 (admin score entry) was end-to-end verified; Phase 7 (email reminders) is code-complete but awaiting DB apply + a local E2E smoke test against the account owner's inbox (sandbox sender; multi-user testing still deferred to Phase 9).
+**Current phase:** Phase 7 🟡 code-complete. Next: apply `0011_users_missing_prediction.sql`, set `CRON_SECRET`, smoke-test the cron route, then move to Phase 8 (polish/UAT).
+**Schedule status:** Phases 6 and 7 were budgeted for 2026-06-04 through 2026-06-07 and landed 9 days early. Phases 0 through 7 done in code; **about 9 days ahead of plan.** 14 days until WC kickoff (2026-06-11).
 
 ### Done (in order, with the commit that closed each piece)
 
@@ -23,8 +23,9 @@
 | **4** — Group + champion + bracket placeholder | 🟢 | `/palpites/grupos`, `/palpites/campeao`, `/palpites/mata-mata` placeholder, `/palpites` hub. 0007 bonus table + `compute_group_standings()` + group/champion `recompute_bonuses`. 0008 makes it idempotent under score corrections. doc-auditor pass. |
 | **5** — Ranking + perfil + peer predictions | 🟢 | `/ranking` (live via Realtime), `/perfil` (per-pool stats), `/jogos/[matchId]` post-kickoff peer predictions card. 0009 opted `score` + `bonus` into the realtime publication. User verified live ranking refresh. |
 | **6** — Admin score entry | 🟢 | `/admin/jogos/[matchId]` with score-entry + reagendar forms; new `lib/supabase/service.ts` for the only write path that bypasses RLS. 0010 adds `match.winner_team_id` + the `match_winner_is_a_team` CHECK, and rewrites `recompute_bonuses` so finals decided on penalties still award the champion bonus (closes the Phase 4 P1). Server action recomputes `recompute_match` then loops `recompute_bonuses` across every pool. "Editar resultado / horário →" link wired into `/jogos/[matchId]` for admins. Desktop nav added (`components/desktop-nav.tsx` + shared `components/nav-items.ts`) — Phase 1 only shipped the mobile bottom nav. User manually verified happy-path score entry. Doc-auditor + P0/P1 follow-up applied. |
+| **7** — Email reminders | 🟡 | `emails/bet-reminder.tsx` (React Email, PT-BR), `app/api/cron/send-reminders/route.ts` (hourly, Bearer-gated, dedup via `reminder_sent`), `vercel.json` cron declaration, `/perfil` opt-out toggle. 0011 adds the `users_missing_prediction()` RPC (service-role only). Awaiting DB apply + local smoke test; multi-user E2E deferred to Phase 9 (Resend domain). |
 
-All 10 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`). The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
+10 of 11 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`); 0011 is pending. The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
 
 ### Outstanding manual / external work
 
@@ -357,17 +358,30 @@ Tightening pass after the `doc-auditor` report. **All docs-only — no code or m
 
 ---
 
-## Phase 7 — Email reminders (Days 16-17: 2026-06-06 to 2026-06-07) — first-to-cut if slipping
+## Phase 7 — Email reminders (code done 2026-05-28, 9 days early) — 🟡 awaiting DB apply + E2E
 
 **Goal:** users get a heads-up before they miss a bet.
 
-- [ ] Create React Email template `BetReminderEmail` (PT-BR)
-- [ ] Implement `app/api/cron/send-reminders/route.ts` running hourly: find users in any pool with no `bet_match` for matches starting in the next 12-24h, send max 1 email per user per match (dedupe via `reminder_sent`, already created in Phase 2 schema)
-- [ ] Expose the `profile.email_opt_out` toggle on `/perfil`
+- [x] Create React Email template `emails/bet-reminder.tsx` (PT-BR, São Paulo time + "(horário de Brasília)" + relative hours, "Palpitar agora" CTA).
+- [x] Implement `app/api/cron/send-reminders/route.ts` — hourly, Bearer-gated by `CRON_SECRET`. Pulls every match in the `now+12h .. now+24h` window, calls the new `users_missing_prediction(match_id)` SQL function per match, renders the email via `@react-email/components`, sends via Resend, inserts a `reminder_sent` row to dedupe across runs. Race-safe: a duplicate-key error from a concurrent run is treated as a benign "already sent".
+- [x] `supabase/migrations/0011_users_missing_prediction.sql` — `SECURITY DEFINER` function returning `(user_id, email, name)` for users who are pool members, have no `bet_match` for the match in any of their pools, are not `email_opt_out`, and haven't been reminded yet. Function is service-role only (no grant to `authenticated`/`anon`) so it can't leak email addresses.
+- [x] `vercel.json` declares `/api/cron/send-reminders` on the `0 * * * *` schedule.
+- [x] Expose the `profile.email_opt_out` toggle on `/perfil` — `OptOutToggle` (Client) auto-submits on change via `requestSubmit()`, server action upserts on `profile`.
+
+**Pending (need user / external):**
+
+- [ ] **Apply `supabase/migrations/0011_users_missing_prediction.sql` in the Supabase SQL Editor.** Idempotent — uses `CREATE OR REPLACE`.
+- [ ] **Set `CRON_SECRET` in `.env.local`** (generate with e.g. `openssl rand -base64 32`). The cron route returns 401 without it.
+- [ ] **Local E2E smoke test** — fake-shift a match into the 12-24h window via SQL, hit `http://localhost:3001/api/cron/send-reminders` with `Authorization: Bearer <secret>` (curl / Thunder Client / browser DevTools), confirm the reminder lands in the account-owner inbox (sandbox sender limit applies until the Resend domain is verified — see Phase 9 carry-over).
+- [ ] **Multi-user E2E** is deferred to Phase 9 (waiting on a verified Resend domain).
+- [ ] **Set `CRON_SECRET` and `APP_URL` in Vercel project env vars** when the project is created (Phase 9).
 
 **Verify:**
-- Create a test user opted in with no prediction for a fake match 12-24h away → reminder email is received once when the cron runs.
-- Toggling opt-out prevents future sends.
+- Fake-shift a match into the window, hit the route, confirm a single reminder email arrives and a `reminder_sent` row gets created.
+- Run the route a second time — no duplicate email, no new `reminder_sent` row, response shows `sent: 0`.
+- Predict the match → run the route → no email (the user no longer satisfies `users_missing_prediction`).
+- Toggle the opt-out checkbox on `/perfil` → run the route → no email.
+- Hit the route without the Bearer header → 401.
 
 ---
 

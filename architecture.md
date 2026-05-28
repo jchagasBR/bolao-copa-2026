@@ -137,7 +137,10 @@ bolao-copa-2026/
 │   │   │   ├── mata-mata/page.tsx
 │   │   │   └── campeao/page.tsx
 │   │   ├── ranking/page.tsx       # ranking of the active pool
-│   │   └── perfil/page.tsx        # user's bets across pools, with a pool filter
+│   │   └── perfil/
+│   │       ├── page.tsx           # user's per-pool stats + opt-out toggle + atalhos
+│   │       ├── actions.ts         # setEmailOptOut server action
+│   │       └── opt-out-toggle.tsx # Client Component, auto-submits on change
 │   ├── admin/                          # admin area (any pool admin)
 │   │   ├── layout.tsx                  # gates /admin/* via any-pool-admin check; notFound() otherwise
 │   │   └── jogos/[matchId]/            # single per-match editor
@@ -180,8 +183,11 @@ bolao-copa-2026/
 │   │   ├── 0007_bonus.sql                      # bonus table, compute_group_standings, recompute_bonuses v1
 │   │   ├── 0008_recompute_bonuses_idempotent.sql # delete-then-insert idempotency on score corrections
 │   │   ├── 0009_realtime.sql                   # opts score + bonus into supabase_realtime publication
-│   │   └── 0010_winner_team_id.sql             # match.winner_team_id + champion bonus on penalty finals
+│   │   ├── 0010_winner_team_id.sql             # match.winner_team_id + champion bonus on penalty finals
+│   │   └── 0011_users_missing_prediction.sql   # SECURITY DEFINER RPC powering the reminder cron
 │   └── README.md                  # how to apply migrations via the SQL Editor
+├── emails/
+│   └── bet-reminder.tsx           # React Email template for the prediction-reminder email (PT-BR)
 ├── tests/
 │   └── scoring.spec.ts            # vitest, tests pure scoring functions
 ├── middleware.ts                  # protects /(app)/* and /admin/*
@@ -603,9 +609,11 @@ There is no external sports data API. Match scores arrive in the system through 
 
 ## 7. Email notifications
 
-- **Template:** React Email, single template `BetReminderEmail` with the participant's name, match details, and a deep link.
-- **Trigger:** `/api/cron/send-reminders` hourly. Idempotency via the `reminder_sent` table.
-- **Opt-out:** `profile.email_opt_out` boolean (see §4 schema), toggle on `/perfil`.
+- **Template:** React Email, single template `emails/bet-reminder.tsx` with the participant's name, the match metadata (stage + teams), São Paulo time labeled "(horário de Brasília)" plus a relative phrase ("Começa em ~12h"), and a "Palpitar agora" CTA deep-linking to `/jogos/[matchId]`.
+- **Trigger:** `app/api/cron/send-reminders/route.ts` runs hourly via Vercel Cron (declared in `vercel.json` at `0 * * * *`). Gated by an `Authorization: Bearer ${CRON_SECRET}` header — Vercel Cron sets this automatically when `CRON_SECRET` is in the project env vars; locally the user passes the same header by hand.
+- **Selection logic** (per match in the `now+12h .. now+24h` window): a SECURITY DEFINER SQL function `users_missing_prediction(match_id)` returns `(user_id, email, name)` for users who are pool members, have no `bet_match` for the match in any of their pools, are not `email_opt_out`, and haven't already been reminded. The function is granted only to the service role — it joins `auth.users` for the email and would leak addresses if exposed.
+- **Idempotency:** the `reminder_sent (user_id, match_id)` PK rejects duplicate inserts from concurrent runs; the cron treats the duplicate-key error as a benign "already sent". A user who predicts the match between two cron runs drops out of the selection naturally — no email goes out.
+- **Opt-out:** `profile.email_opt_out` boolean (see §4 schema), toggled on `/perfil` via an auto-submitting `OptOutToggle` Client Component. The selection query filters opt-outs at source.
 
 ## 8. GitHub setup
 
