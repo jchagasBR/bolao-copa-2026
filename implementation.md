@@ -7,9 +7,9 @@
 
 ## Session log
 
-**Last session ended:** 2026-05-28 — Phases 6, 7, and the code parts of Phase 8 all landed in the same session. Phase 7 cron route was verified locally (auth gate + empty window); inbox delivery deferred to production. Phase 8 code parts: `/regras` rules page, global footer, a11y polish (skip-link + `aria-current`).
-**Current phase:** Phase 8 🟡 code-complete. The remaining Phase 8 items are user-driven UAT (recruit testers, real-friends pool, mobile device smoke test) and mostly gated on the Resend domain verification + Vercel deploy. Next code phase is Phase 9 (launch wiring) when the user is ready.
-**Schedule status:** Phases 6, 7, and 8 (code) were budgeted for 2026-06-04 through 2026-06-08 and landed 11 days early. Phases 0 through 8 (code) done; **about 11 days ahead of plan.** 14 days until WC kickoff (2026-06-11).
+**Last session ended:** 2026-05-29 — Phase 9 (launch) kicked off and got ~70% through. Vercel + Resend domain wiring complete; first auth round-trip verified end-to-end on prod; first colleague hit a real bug (invite-code lookup blocked by RLS — fixed in 0012 in the same session). Stopping mid-phase to come back fresh tomorrow.
+**Current phase:** Phase 9 🟡 partially deployed. Production is live at `https://bolaofutebolfutebolclube.vercel.app` with the verified Resend domain `bolaofutebolfutebolclube.com`. Next code items are admin score entry smoke + cron prod smoke + branch protection + doc-auditor sweep + broader friend invites. See "Phase 9 — Launch" below for the full pending checklist.
+**Schedule status:** Phase 9 was budgeted for Day 20 (2026-06-10) and started on 2026-05-29 — about 12 days early. 13 days until WC kickoff (2026-06-11). Plenty of buffer to absorb anything UAT surfaces.
 
 ### Done (in order, with the commit that closed each piece)
 
@@ -24,9 +24,10 @@
 | **5** — Ranking + perfil + peer predictions | 🟢 | `/ranking` (live via Realtime), `/perfil` (per-pool stats), `/jogos/[matchId]` post-kickoff peer predictions card. 0009 opted `score` + `bonus` into the realtime publication. User verified live ranking refresh. |
 | **6** — Admin score entry | 🟢 | `/admin/jogos/[matchId]` with score-entry + reagendar forms; new `lib/supabase/service.ts` for the only write path that bypasses RLS. 0010 adds `match.winner_team_id` + the `match_winner_is_a_team` CHECK, and rewrites `recompute_bonuses` so finals decided on penalties still award the champion bonus (closes the Phase 4 P1). Server action recomputes `recompute_match` then loops `recompute_bonuses` across every pool. "Editar resultado / horário →" link wired into `/jogos/[matchId]` for admins. Desktop nav added (`components/desktop-nav.tsx` + shared `components/nav-items.ts`) — Phase 1 only shipped the mobile bottom nav. User manually verified happy-path score entry. Doc-auditor + P0/P1 follow-up applied. |
 | **7** — Email reminders | 🟢 | `emails/bet-reminder.tsx` (React Email, PT-BR), `app/api/cron/send-reminders/route.ts` (hourly, Bearer-gated, dedup via `reminder_sent`), `vercel.json` cron declaration, `/perfil` opt-out toggle. 0011 adds the `users_missing_prediction()` RPC (service-role only). Auth gate + empty-window happy path verified locally (401/401/200 with empty results); inbox-delivery verification deferred to production. Multi-user E2E still deferred to Phase 9 (Resend domain). Middleware fix shipped to let `/api/*` bypass the session redirect. |
-| **8** — Polish (code parts) | 🟡 | `/regras` public PT-BR rules page, global `Footer` in root layout, "Regras" link in `/perfil` Atalhos for mobile. A11y polish: skip-link in root layout, `aria-current="page"` on nav. UAT (recruit testers + Lighthouse run + mobile smoke test) deferred — most is gated on Resend domain + Vercel deploy. |
+| **8** — Polish (code parts) | 🟡 | `/regras` public PT-BR rules page, global `Footer` (later updated to plug the Futebol Futebol Clube podcast), "Regras" link in `/perfil` Atalhos for mobile. Clickable pool cards on the dashboard (community fix during UAT, commit `7ce8882`). Shared-position helper so tied users share a ranking number (rule change requested by the pool owner, commit `c883278`). A11y polish: skip-link in root layout, `aria-current="page"` on nav. UAT (recruit testers + Lighthouse run + mobile smoke test) deferred — most is gated on Resend domain + Vercel deploy. |
+| **9** — Launch | 🟡 | Resend domain `bolaofutebolfutebolclube.com` verified (Cloudflare auto-config). Vercel project `bolaofutebolfutebolclube` deployed, prod URL `https://bolaofutebolfutebolclube.vercel.app`. All 7 env vars set (prod-specific `CRON_SECRET` + `RESEND_FROM_EMAIL=bolao@bolaofutebolfutebolclube.com` + the real `APP_URL`). Cron schedule downgraded to daily 12:00 UTC because Hobby plan limit (commit `da67af7`); window widened from 12-24h to next-24h. Supabase Site URL / Redirect URLs / SMTP sender updated. First auth round-trip verified end-to-end on prod 2026-05-29. First UAT bug surfaced + closed in-session: 0012 added a `find_pool_by_invite_code()` SECURITY DEFINER RPC because the pool table's SELECT policy blocked non-members from looking up by invite code (commit `eded48e`). Pending: admin-score-entry prod smoke, cron prod smoke, branch protection, doc-auditor pre-launch sweep, broader friend invites. |
 
-10 of 11 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`); 0011 is pending. The dev server has been verified through the happy path with a single user; multi-user testing is deferred to Phase 9 (waiting on a verified Resend domain).
+12 of 12 migrations have been applied to the live Supabase project (`fzsqraciucckavhlndjp` in `eu-central-1`). Production is live and multi-user friendly (first colleague test passed end-to-end after the 0012 fix).
 
 ### Outstanding manual / external work
 
@@ -415,15 +416,38 @@ Tightening pass after the `doc-auditor` report. **All docs-only — no code or m
 
 ---
 
-## Phase 9 — Launch (Day 20: 2026-06-10)
+## Phase 9 — Launch (started 2026-05-29, 12 days early) — 🟡 partially deployed
 
 **Goal:** all 5-30 friends are onboarded before the first match.
 
-- [ ] Send the invite code + signup link to the full friend list via WhatsApp with a short intro message
-- [ ] Set a personal reminder to monitor the cron and ranking during the first match (2026-06-11)
-- [ ] Have the admin panel open during that match to handle any API miss in real time
+See [LAUNCH.md](./LAUNCH.md) for the canonical step-by-step launch sequence; this section tracks the high-level state.
 
-**Verify:**
+### Done 2026-05-29
+
+- [x] **Resend domain verified** — `bolaofutebolfutebolclube.com`. DKIM/SPF/DMARC records added via Cloudflare's auto-configure integration. Domain marked "ready to send emails" in Resend.
+- [x] **Vercel project created** — `bolaofutebolfutebolclube`. Production URL: `https://bolaofutebolfutebolclube.vercel.app`. All 7 env vars set including the new prod `CRON_SECRET` and `RESEND_FROM_EMAIL=bolao@bolaofutebolfutebolclube.com`. `APP_URL` updated post-first-deploy to the actual production URL.
+- [x] **Vercel Hobby cron constraint** — Hobby plan caps cron at 1 run/day, so `vercel.json` schedule was downgraded from `0 * * * *` to `0 12 * * *` (daily 12:00 UTC = 09:00 BRT) and the cron route's window widened from `[now+12h, now+24h]` to `[now, now+24h]`. Copy on `/regras` and `/perfil` updated to "no dia anterior". See commit `da67af7`.
+- [x] **Supabase Auth config updated** — Site URL, Redirect URLs, and SMTP sender all switched from `localhost` / sandbox to the prod URL and `bolao@bolaofutebolfutebolclube.com`.
+- [x] **First auth round-trip smoke test passed** — fresh signup at the prod URL, confirmation email arrived from the verified domain in inbox (not spam), confirmation link landed authenticated on `/`.
+- [x] **First UAT bug found and fixed** — colleague hit "Código não encontrado" on a valid invite code because the pool table's SELECT policy blocks non-members. Added `0012_find_pool_by_invite_code.sql` (SECURITY DEFINER RPC returning only the pool id, granted to `authenticated`) and collapsed the 30-line workaround in the join action to a single `supabase.rpc()` call. Verified fixed by the colleague after Vercel auto-redeploy. Commit `eded48e`.
+
+### Pending (next session)
+
+- [ ] **Complete the colleague's test pass** — pool join now works; they still need to predict 3 matches, see ranking, see perfil. The remaining smoke-test items from the test spec we sent them.
+- [ ] **Admin score entry on prod** — fake-finish a match via SQL Editor + watch `/ranking` reorder (LAUNCH.md §4d).
+- [ ] **Cron route prod smoke** — fake-shift a match into the next 24h + manually `curl` the cron route from a terminal + confirm an email lands + verify `reminder_sent` row created + second run returns `sent: 0` (LAUNCH.md §4e).
+- [ ] **Reset the fake-shifted matches** before broader invites (LAUNCH.md §4f).
+- [ ] **Branch protection on `main`** — require PR + status checks. CI has been stable for a while; safe to enable (LAUNCH.md §5).
+- [ ] **Custom domain on Vercel** (optional) — point `bolaofutebolfutebolclube.com` (or a subdomain) at the Vercel project so the user-visible URL drops the `.vercel.app` suffix. If done, also update `APP_URL` env var and Supabase Site URL to match (LAUNCH.md §3).
+- [ ] **Doc-auditor pre-launch sweep** — final read-only audit of the founding docs against the live code (LAUNCH.md §6).
+- [ ] **Broader friend invites** — once the above is done, share the invite code with the rest of the friend group via WhatsApp using the message template prepared 2026-05-29 (PT-BR convite + roteiro de teste).
+- [ ] **Set a personal reminder** to monitor the cron and ranking during the first WC match (2026-06-11) — the admin SLA is "enter score within 12h of full time".
+
+### Carry-over from earlier phases that's still open
+
+- [ ] **Apply migration 0012 in Supabase SQL Editor** — already applied 2026-05-29 by the user, verified working in prod. Listed here only for the audit trail.
+
+**Verify (gate to declaring the WC pool "live"):**
 - First WC match completes; final score is reflected in the database, points are computed, and ranking is correct.
 - Friends report (informally) that the experience worked end-to-end.
 

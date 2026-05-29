@@ -186,7 +186,8 @@ bolao-copa-2026/
 │   │   ├── 0008_recompute_bonuses_idempotent.sql # delete-then-insert idempotency on score corrections
 │   │   ├── 0009_realtime.sql                   # opts score + bonus into supabase_realtime publication
 │   │   ├── 0010_winner_team_id.sql             # match.winner_team_id + champion bonus on penalty finals
-│   │   └── 0011_users_missing_prediction.sql   # SECURITY DEFINER RPC powering the reminder cron
+│   │   ├── 0011_users_missing_prediction.sql   # SECURITY DEFINER RPC powering the reminder cron
+│   │   └── 0012_find_pool_by_invite_code.sql   # SECURITY DEFINER RPC so non-members can join by code
 │   └── README.md                  # how to apply migrations via the SQL Editor
 ├── emails/
 │   └── bet-reminder.tsx           # React Email template for the prediction-reminder email (PT-BR)
@@ -456,6 +457,8 @@ create policy pool_insert_self_admin on pool for insert
 create policy pool_admin_update on pool for update
   using (admin_id = auth.uid()) with check (admin_id = auth.uid());
 ```
+
+**Joining by invite code from outside the pool.** Because `pool_member_select` only lets admins and existing members read pool rows, a non-member trying to look up a pool by `invite_code` via a direct table query gets 0 rows even for a valid code. The `/boloes/entrar` server action therefore calls a SECURITY DEFINER RPC `find_pool_by_invite_code(text) → uuid` (added in `0012_find_pool_by_invite_code.sql`) which returns only the pool id (no name, admin_id, or other data) — granted to `authenticated`. The user can then INSERT a `pool_member` row themselves under their own `auth.uid()` per `pm_self_insert`. This preserves the §4.6 "anyone with the code can join" model without loosening the SELECT policy on `pool`.
 
 **`pool_member`**
 ```sql

@@ -6,11 +6,13 @@ A step-by-step plan for taking Bolão Copa 2026 from "code on `main`" to "real f
 
 **Estimated time:** ~45-60 minutes end-to-end, gated on DNS propagation for the Resend domain (often <5 min, sometimes hours).
 
+**Progress as of 2026-05-29:** §1, §2, §3, §4a, §4b done. The dev pool was created earlier; first colleague joined (after 0012 fix landed mid-session) and ran through the test spec. §4c-§4f, §5-§7 pending — pick up there next session.
+
 ---
 
 ## 1. Resend domain verification
 
-**Why it has to be first:** until a custom domain is verified, the Resend sandbox sender (`onboarding@resend.dev`) only delivers to your own Resend account email. You cannot invite anyone else, cannot test multi-user reminders, and the auth confirmation emails Supabase sends through Resend SMTP will also fail to land in other inboxes.
+**Why it has to be first:** until a custom domain is verified, the Resend sandbox sender (`onboarding@resend.dev`) only  to your own Resend account email. You cannot invite anyone else, cannot test multi-user reminders, and the auth confirmation emails Supabase sends through Resend SMTP will also fail to land in other inboxes.
 
 ### Steps
 
